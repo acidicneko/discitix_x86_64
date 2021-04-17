@@ -1,0 +1,5 @@
+.vscode/*
+*.o
+image.hdd
+kernel.elf
+limine_bak/*
