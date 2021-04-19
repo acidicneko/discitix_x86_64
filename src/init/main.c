@@ -21,6 +21,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
 #include "arch/x86_64/gdt.h"
+#include "arch/x86_64/idt.h"
+#include "arch/x86_64/isr.h"
+#include "arch/x86_64/irq.h"
 #include "init/stivale2.h"
 #include "drivers/tty/tty.h"
 #include "mm/pmm.h"
@@ -34,8 +37,12 @@ void kmain(struct stivale2_struct* bootinfo){
     init_colors(0x282828, 0xcc241d, 0x98971a, 0xd79921, 0x458588, 0xb16286, 0x689d6a, 0xa89984, 
             0x928374, 0xfb4934, 0xb8bb26, 0xfabd2f, 0x83a598, 0xd8369b, 0x8ec07c, 0xebdbb2);
     gdt_install();
+	idt_install();
+	init_isr();
+	init_irq();
 	init_pmm(bootinfo);    
 	printf("\nBootloader: %s\nBootloader Version: %s\n", bootinfo->bootloader_brand, bootinfo->bootloader_version);
 	printf("Total system memory: %ul KB\n", get_total_memory()/1024);
 	sysfetch();
+	asm volatile("int $0");
 }

@@ -48,3 +48,27 @@ char * utoa(uint64_t value, char *str, uint8_t base){
 	}
 	return rc;
 }
+
+void* memset(void* bufptr, int value, size_t size) {
+    unsigned char* buf = (unsigned char*) bufptr;
+    for (size_t i = 0; i < size; i++)
+        buf[i] = (unsigned char) value;
+    return bufptr;
+}
+
+uint16_t *memsetw(uint16_t *dest, uint16_t val, size_t count){
+    uint16_t *temp = dest;
+    while(count--){   
+        *temp++ = val;
+    }
+    return dest;
+}
+
+uint8_t *memcpy(uint8_t *dest, const uint8_t *src, size_t n){
+    uint8_t *d = dest;
+    const uint8_t *s = src;
+    while(n--){
+        *d++=*s++;
+    }
+    return dest;
+}

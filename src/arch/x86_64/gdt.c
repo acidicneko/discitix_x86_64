@@ -1,4 +1,5 @@
 #include "arch/x86_64/gdt.h"
+#include "libk/utils.h"
 
 gdt_entry_t gdt_entries[3] = {
     {0, 0, 0, 0x00, 0x00, 0}, /* Kernel NULL Segment*/
@@ -11,4 +12,5 @@ void gdt_install(){
     gdt.size = (sizeof(gdt_entry_t)*3) - 1;
     gdt.offset = (uint64_t)&gdt_entries;
     load_gdt(&gdt);
+	log(INFO, "GDT initialised\n");
 }

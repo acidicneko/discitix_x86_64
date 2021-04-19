@@ -3,28 +3,34 @@
 
 #include <stdint.h>
 
-#define IDT_TA_IG   0b10001110
-#define IDT_TA_CG   0b10001100
-#define IDT_TA_TG   0b10001111
+enum idt_attr {
+  idt_a_present = 1 << 7,
+  idt_a_ring_0 = 0 << 5,
+  idt_a_ring_1 = 1 << 5,
+  idt_a_ring_2 = 2 << 5,
+  idt_a_ring_3 = 3 << 5,
+  idt_a_type_interrupt = 0xE,
+  idt_a_type_trap = 0xF
+};
 
-typedef struct{
-    uint16_t offset0;
-    uint16_t selector;
-    uint8_t ist;
-    uint8_t type_attribute;
-    uint16_t offset1;
-    uint32_t offset2;
-    uint32_t ignore;
-} idt_entry_t;
+typedef struct idt_entry_t {
+  uint16_t base_low;
+  uint16_t sel;
+  uint8_t ist;
+  uint8_t flags;
+  uint16_t base_mid;
+  uint32_t base_high;
+  uint32_t zero;
+} __attribute__((packed)) idt_entry_t;
 
-typedef struct{
-    uint16_t limit;
-    uint64_t offset;
-} __attribute__((packed)) idt_descriptor_t;
+typedef struct idt_ptr_t {
+  uint16_t limit;
+  uint64_t base;
+} __attribute__((packed)) idt_ptr_t;
 
-extern void load_idt(idt_descriptor_t* idt);
+extern idt_entry_t idt_entries[];
 
-void set_offset(idt_entry_t* entry, uint64_t offset);
-uint64_t get_offset(idt_entry_t* entry);
+void idt_set_entry(idt_entry_t *entry, int user_space, void (*func)(void));
+void idt_install();
 
 #endif
