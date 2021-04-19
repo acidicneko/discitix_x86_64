@@ -26,6 +26,7 @@ SOFTWARE. */
 #include "arch/x86_64/irq.h"
 #include "init/stivale2.h"
 #include "drivers/tty/tty.h"
+#include "drivers/keyboard.h"
 #include "mm/pmm.h"
 #include "libk/stdio.h"
 #include "libk/string.h"
@@ -40,9 +41,13 @@ void kmain(struct stivale2_struct* bootinfo){
 	idt_install();
 	init_isr();
 	init_irq();
+	keyboard_install();
 	init_pmm(bootinfo);    
 	printf("\nBootloader: %s\nBootloader Version: %s\n", bootinfo->bootloader_brand, bootinfo->bootloader_version);
 	printf("Total system memory: %ul KB\n", get_total_memory()/1024);
 	sysfetch();
-	asm volatile("int $0");
+	while(1){
+		char c = keyboard_read();
+		printf("%c", c);
+	}
 }

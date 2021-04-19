@@ -74,6 +74,12 @@ void tty_putchar_raw(char c){
         x_cursor = 0;
     else if(c == '\t')
         x_cursor = (x_cursor - (x_cursor % 8)) + 8;
+
+	else if(c == '\b'){
+		x_cursor--;
+		tty_putchar_raw(' ');
+		x_cursor--;
+	}
     else{
         terminal_cell_t cell = {
             .printable_char = c,
