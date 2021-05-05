@@ -2,11 +2,25 @@
 
 A hobbyist kernel written in C!
 
+## About
+Discitix is a kernel being written to wander in the world of low level!
+Discitix aims to be POSIX-compilant in future.
+Pardon if you find any nonsense in my code :p
+
 ## Discitix in action
 
-under construction
+![Settings Window](https://raw.githubusercontent.com/ayush7788/discitix_x86_64/main/images/interrupts.png)
 
 ### Features
 - [x] Port to x86_64
 - [x] High resolution framebuffer driver
-- [ ] Add proper README TwT
+- [x] Physical Memory Manager
+- [x] Interrupts implemented
+- [ ] Virtual Memory Manager
+- [ ] Heap memory
+- [ ] VFS
+- [ ] HDD driver
+- [ ] echFS
+- [ ] Syscalls
+- [ ] ELF execution
+- [ ] Process Management
