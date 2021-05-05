@@ -1,4 +1,4 @@
-CC = gcc-10
+CC = gcc
 CFLAGS = -Werror -Wall -O2 -pipe
 INTERNALCFLAGS  :=       \
 	-I src/include/        \
@@ -46,6 +46,12 @@ $(IMAGE): $(TARGET)
 $(TARGET): $(OFILES)
 	@echo [LD] $(TARGET)
 	@$(CC) $(LDINTERNALFLAGS) $(OFILES) -o $@
+
+src/arch/idt.o: src/arch/idt.c
+	@$(CC) -I src/include/ -ffreestanding -mgeneral-regs-only -c $< -o $@
+
+#src/arch/isr.o: src/arch/isr.c
+#	@$(CC) -I src/include/ -ffreestanding -mgeneral-regs-only -c $< -o $@
 
 %.o: %.c
 	@echo [CC] $@

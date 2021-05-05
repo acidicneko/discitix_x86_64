@@ -1,7 +1,43 @@
 extern fault_handler
 extern irq_handler
 
-%macro pusha 0
+global load_idt
+
+load_idt:
+    lidt[rdi]
+        ret
+    iretq
+
+%macro ISR_NOERRCODE 1
+  [GLOBAL isr%1]
+  isr%1:
+    cli
+    push byte 0
+    push byte %1
+    mov rdi, %1
+    jmp isr_common_stub
+%endmacro
+
+%macro ISR_ERRCODE 1
+  [GLOBAL isr%1]
+  isr%1:
+    cli
+    push byte %1
+    mov rdi, %1
+    jmp isr_common_stub
+%endmacro
+
+%macro IRQ 2
+  global irq%1
+  irq%1:
+    cli
+    push byte 0
+    push byte %2
+    mov rdi, %1
+    jmp irq_common_stub
+%endmacro
+
+%macro save_regs 0
       push   rax
       push   rbx
       push   rcx
@@ -20,7 +56,7 @@ extern irq_handler
       push   r15
 %endmacro
 
-%macro popa 0
+%macro restore_regs 0
       pop       r15
       pop       r14
       pop       r13
@@ -39,66 +75,16 @@ extern irq_handler
       pop       rax
 %endmacro
 
-%macro ISR_NOERRCODE 1
-  [GLOBAL isr_%1]
-  isr_%1:
-    cli
-    push byte 0
-    push byte %1
-    mov rdi, %1
-    jmp isr_common_stub
-%endmacro
-
-%macro ISR_ERRCODE 1
-  [GLOBAL isr_%1]
-  isr_%1:
-    cli
-    push byte %1
-    mov rdi, %1
-    jmp isr_common_stub
-%endmacro
-
-%macro IRQ 2
-  global irq_%1
-  irq_%1:
-    cli
-    push byte 0
-    push byte %2
-    mov rdi, %1
-    jmp irq_common_stub
-%endmacro
-
 isr_common_stub:
-    pusha
-
-    mov     ax, ds
-    push    rax
-
-    mov     ax, 0x10
-    mov     ds, ax
-    mov     es, ax
-    mov     fs, ax
-    mov     gs, ax
-
-    call fault_handler
-
-    pop      rbx
-    mov      ds, bx
-    mov      es, bx
-    mov      fs, bx
-    mov      gs, bx
-
-
-    popa
-    add rsp,16
-    sti
-    iretq
-
-irq_common_stub:
-
-    pusha
-    mov ax, ds
-    push rax
+    save_regs       ;save all registers
+    mov      ds, ax ;save all segments
+    push     ax
+    mov      es, ax
+    push     ax
+    mov      fs, ax
+    push     ax
+    mov      gs, ax
+    push     ax
 
     mov ax, 0x10
     mov ds, ax
@@ -106,17 +92,35 @@ irq_common_stub:
     mov fs, ax
     mov gs, ax
 
-    call irq_handler
-    pop rbx
-    mov ds, bx
-    mov es, bx
-    mov fs, bx
-    mov gs, bx
-
-    popa
-
+    mov rdi, rsp    ;pass pushed elements as argument
+    call fault_handler  ; call fault_handler
+    pop ax          ;restore ax
+    restore_regs    ;rest all registers
     add rsp, 16
     sti
+    iretq
+
+irq_common_stub:
+    save_regs
+    mov      ds, ax
+    push     ax
+    mov      es, ax
+    push     ax
+    mov      fs, ax
+    push     ax
+    mov      gs, ax
+    push     ax
+
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov rdi, rsp
+    call irq_handler
+    pop ax
+    restore_regs
+    add rsp, 16
     iretq
 
 ISR_NOERRCODE 0
