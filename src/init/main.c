@@ -22,9 +22,12 @@ SOFTWARE. */
 
 #include "arch/x86_64/gdt.h"
 #include "arch/x86_64/idt.h"
+#include "arch/x86_64/irq.h"
+#include "arch/x86_64/isr.h"
 #include "init/stivale2.h"
 #include "drivers/tty/tty.h"
 #include "drivers/keyboard.h"
+#include "drivers/pit.h"
 #include "mm/pmm.h"
 #include "libk/stdio.h"
 #include "libk/string.h"
@@ -40,12 +43,15 @@ void kmain(struct stivale2_struct* bootinfo){
 				0x4C566A, 0xBF616A, 0xA3BE8C, 0xEBCB8B, 0x81A1C1, 0xB48EAD, 0x8FBCBB, 0xECEFF4);*/
     gdt_install();
 	init_idt();
+	init_isr();
+	init_irq();
 	keyboard_install();
+	pit_install();
 	init_pmm(bootinfo);    
 	printf("\nBootloader: %s\nBootloader Version: %s\n", bootinfo->bootloader_brand, bootinfo->bootloader_version);
 	printf("Total system memory: %ul KB\n", get_total_memory()/1024);
 	sysfetch();
-	//asm("int $0");
+	asm("int $0");
 	for(;;){
 		asm("sti;hlt");
 	}

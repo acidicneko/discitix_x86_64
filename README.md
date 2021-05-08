@@ -6,6 +6,7 @@ A hobbyist kernel written in C!
 Discitix is a kernel being written to wander in the world of low level!
 Discitix aims to be POSIX-compilant in future.
 Pardon if you find any nonsense in my code :p
+Join Discitix's own [Discord Server](https://discord.gg/6a9C3r2fGU)
 
 ## Discitix in action
 

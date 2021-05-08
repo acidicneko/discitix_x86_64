@@ -20,14 +20,7 @@ typedef struct{
 } __attribute__((packed)) idt_desc_t;
 
 extern void load_idt(idt_desc_t* idtptr);
-void idt_set_gate(uint8_t num, uint64_t base, uint16_t sel, uint8_t flags, uint8_t ist);
+void idt_set_gate(uint8_t num, uint64_t base, uint16_t sel, uint8_t flags);
 void init_idt();
-
-void irq_install_handler(int irq, void (*handler)(register_t* regs));
-void irq_uninstall_handler(int irq);
-void send_eoi(int irq);
-void irq_handler(register_t* regs);
-
-void fault_handler(register_t* regs);
 
 #endif

@@ -20,7 +20,7 @@ void framebuffer_put_pixel(int x_pos, uint32_t y_pos, uint32_t color){
 }
 
 void framebuffer_clear(uint32_t color){
-    for(int i = 0; i < framebuffer_height*framebuffer_width; i++){
+    for(uint32_t i = 0; i < framebuffer_height*framebuffer_width; i++){
         framebuffer_address[i] = color;
     }
 }

@@ -1,3 +1,5 @@
+[bits 64]
+
 extern fault_handler
 extern irq_handler
 
@@ -14,7 +16,6 @@ load_idt:
     cli
     push byte 0
     push byte %1
-    mov rdi, %1
     jmp isr_common_stub
 %endmacro
 
@@ -23,7 +24,6 @@ load_idt:
   isr%1:
     cli
     push byte %1
-    mov rdi, %1
     jmp isr_common_stub
 %endmacro
 
@@ -33,7 +33,6 @@ load_idt:
     cli
     push byte 0
     push byte %2
-    mov rdi, %1
     jmp irq_common_stub
 %endmacro
 
@@ -42,10 +41,9 @@ load_idt:
       push   rbx
       push   rcx
       push   rdx
-      push   rbp
       push   rsi
       push   rdi
-      push   rsp
+      push   rbp
       push   r8
       push   r9
       push   r10
@@ -65,10 +63,9 @@ load_idt:
       pop       r10
       pop       r9
       pop       r8
-      pop       rsp
+      pop       rbp
       pop       rdi
       pop       rsi
-      pop       rbp
       pop       rdx
       pop       rcx
       pop       rbx
@@ -76,49 +73,21 @@ load_idt:
 %endmacro
 
 isr_common_stub:
-    save_regs       ;save all registers
-    mov      ds, ax ;save all segments
-    push     ax
-    mov      es, ax
-    push     ax
-    mov      fs, ax
-    push     ax
-    mov      gs, ax
-    push     ax
-
-    mov ax, 0x10
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-
-    mov rdi, rsp    ;pass pushed elements as argument
-    call fault_handler  ; call fault_handler
-    pop ax          ;restore ax
-    restore_regs    ;rest all registers
+    cld
+    save_regs
+    mov rdi, rsp
+    call fault_handler
+    mov rsp, rax
+    restore_regs
     add rsp, 16
-    sti
     iretq
 
 irq_common_stub:
+    cld
     save_regs
-    mov      ds, ax
-    push     ax
-    mov      es, ax
-    push     ax
-    mov      fs, ax
-    push     ax
-    mov      gs, ax
-    push     ax
-
-    mov ax, 0x10
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
     mov rdi, rsp
     call irq_handler
-    pop ax
+    mov rsp, rax
     restore_regs
     add rsp, 16
     iretq

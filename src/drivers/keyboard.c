@@ -1,4 +1,4 @@
-#include "arch/x86_64/idt.h"
+#include "arch/x86_64/irq.h"
 #include "arch/ports.h"
 #include "drivers/keyboard.h"
 #include "libk/stdio.h"
@@ -32,7 +32,7 @@ const char keyMap_shift[58] = {
 };
 
 /*keyboard IRQ handler*/                                                                                                                                                 
-void keyboard_handler(register_t* regs){                                                                                                                                                              
+void keyboard_handler(register_t* regs){                                                                                                                                                         
   uint8_t scancode;                                                                                                                                                      
   scancode = inb(0x60); /*read from keyboard data port*/
   handleKey_normal(scancode);
@@ -81,7 +81,6 @@ void handleKey_normal(uint8_t scancode){
   char ascii = translate(scancode); /*translate the scancode*/
   if(ascii > 0){                    /*if it's a printable character*/
     buf_char = ascii;               /*store it in the buffer character*/
-    putchar(ascii);
     irq_done = 1;                   /*notify that key has been handled*/
   }
   last_scancode = scancode;         /*this is the last scancode now*/

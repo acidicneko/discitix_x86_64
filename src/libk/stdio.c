@@ -42,6 +42,40 @@ int vsprintf(char* fmt, va_list args){
 					itoa(integer, str, 10);
 					puts(str);
 					break;
+				case 'x':
+					fmt++;
+					if(*fmt == 'l'){
+						unsigned_long = va_arg(args, uint64_t);
+						utoa(unsigned_long, str, 16);
+						puts(str);
+					}
+					else if(*fmt == 'i'){
+						unsigned_int = va_arg(args, uint32_t);
+						utoa((uint64_t)unsigned_int, str, 16);
+						puts(str);
+					}
+					else if(*fmt == 's'){
+						unsigned_short = va_arg(args, int);
+						utoa((uint64_t)unsigned_short, str, 16);
+						puts(str);
+					}
+					else if(*fmt == 'd'){
+						integer = va_arg(args, int);
+						itoa(integer, str, 16);
+						puts(str);
+					}
+					else if(*fmt == 'c'){
+						character = va_arg(args, int);
+						itoa((int)character, str, 16);
+						puts(str);
+					}
+					else if(*fmt == 'h'){
+						unsigned_char = va_arg(args, int);
+						utoa((uint64_t)unsigned_char, str, 16);
+						puts(str);
+					}
+					else	putchar(*fmt);
+					break;
 				case 'u':
 					fmt++;
 					if(*fmt == 'l'){
@@ -59,7 +93,7 @@ int vsprintf(char* fmt, va_list args){
 						utoa((uint64_t)unsigned_short, str, 10);
 						puts(str);
 					}
-					else if(*fmt == 'c'){
+					else if(*fmt == 'h'){
 						unsigned_char = va_arg(args, int);
 						utoa((uint64_t)unsigned_char, str, 10);
 						puts(str);
