@@ -6,7 +6,6 @@ volatile uint64_t pit_ticks = 0;
 
 void pit_handler(register_t* regs){
     pit_ticks++;
-    log(INFO, "In pit_handler()\npit_ticks: %ul\n", pit_ticks);
     send_eoi(regs->int_no);
 }
 

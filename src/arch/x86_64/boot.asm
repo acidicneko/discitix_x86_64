@@ -1,4 +1,4 @@
-section .stivale2hdr
+section .stivale2hdr write
 stivale2_header:
     .entry_point: dq 0
     .stack: dq stack.top

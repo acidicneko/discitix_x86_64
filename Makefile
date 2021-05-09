@@ -1,17 +1,10 @@
 CC = gcc
 CFLAGS = -Werror -Wextra -Wall -O2 -pipe
 INTERNALCFLAGS  :=       \
-	-I src/include/        \
+	-I src/include/      \
 	-ffreestanding       \
-	-mno-red-zone		\
+	-mno-red-zone		 \
 	-fno-exceptions
-#	-fno-stack-protector \
-#	-fno-pic -fpie       \
-#	-mno-80387           \
-#	-mno-mmx             \
-#	-mno-3dnow           \
-#	-mno-sse             \
-#	-mno-sse2            \
 
 LDINTERNALFLAGS :=  \
 	-Tlinker.ld \
@@ -49,10 +42,10 @@ $(TARGET): $(OFILES)
 	@$(CC) $(LDINTERNALFLAGS) $(OFILES) -o $@
 
 src/arch/irq.o: src/arch/irq.c
-	@$(CC) $(CFLAGS) -I src/include/ -ffreestanding -mno-red-zone -mgeneral-regs-only -c $< -o $@
+	@$(CC) $(CFLAGS) -I src/include/ -ffreestanding -mgeneral-regs-only -mno-red-zone -c $< -o $@
 
 src/arch/isr.o: src/arch/isr.c
-	@$(CC) $(CFLAGS) -I src/include/ -ffreestanding -mno-red-zone -mgeneral-regs-only -c $< -o $@
+	@$(CC) $(CFLAGS) -I src/include/ -ffreestanding  -mgeneral-regs-onlys -mno-red-zone  -c $< -o $@
 
 %.o: %.c
 	@echo [CC] $@

@@ -71,13 +71,11 @@ void init_irq(){
 	idt_set_gate(45, (uint64_t)irq13, 0x08, 0x8E);
 	idt_set_gate(46, (uint64_t)irq14, 0x08, 0x8E);
 	idt_set_gate(47, (uint64_t)irq15, 0x08, 0x8E);
-    asm volatile("sti");
     log(INFO, "IRQs initialised\n");
 }
 
 void irq_handler(register_t* regs){
-	asm volatile("cli");
-	log(INFO, "IRQ %ul\n", regs->int_no - 32);
+	log(INFO, "IRQ %ul\n", regs->int_no);
     void (*handler)(register_t* regs);
     handler = interrupt_handlers[regs->int_no - 32];
     if(handler){
@@ -86,5 +84,4 @@ void irq_handler(register_t* regs){
 	else{
 		send_eoi(regs->int_no);
 	}
-	asm volatile("sti");
 }
