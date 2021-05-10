@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 void pit_handler(register_t* regs);
-void pit_install();
+void pit_install(uint16_t hertz);
 void pit_wait(int ticks);
 uint64_t get_ticks();
 

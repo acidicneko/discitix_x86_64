@@ -20,7 +20,6 @@ void init_idt(){
     idt.limit = (sizeof(idt_entry_t) * 256) - 1;
     idt.base = (uint64_t)&idt_entries;
     memset(&idt_entries, 0, sizeof(idt_entry_t)*256);
-    //load_idt(&idt);
     asm volatile("lidt %0" : : "m"(idt));
     log(INFO, "IDT initialised\n");
 }

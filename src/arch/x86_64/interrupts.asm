@@ -3,16 +3,9 @@
 extern fault_handler
 extern irq_handler
 
-global load_idt
-
-load_idt:
-  lidt[rdi]
-    ret
-
 %macro ISR_NOERRCODE 1
   [GLOBAL isr%1]
   isr%1:
-    cli
     push 0
     push %1
     jmp isr_common_stub
@@ -21,7 +14,6 @@ load_idt:
 %macro ISR_ERRCODE 1
   [GLOBAL isr%1]
   isr%1:
-    cli
     push %1
     jmp isr_common_stub
 %endmacro
@@ -29,7 +21,6 @@ load_idt:
 %macro IRQ 2
   global irq%1
   irq%1:
-    ;cli
     push 0
     push %2
     jmp irq_common_stub
@@ -86,7 +77,6 @@ irq_common_stub:
     save_regs
     mov rdi, rsp
     call irq_handler
-    mov rsp, rax
     restore_regs
     add rsp, 16
     iretq

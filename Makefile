@@ -1,9 +1,11 @@
 CC = gcc
-CFLAGS = -Werror -Wextra -Wall -O2 -pipe
+CFLAGS = -Wextra -Wall -O2 -pipe
 INTERNALCFLAGS  :=       \
 	-I src/include/      \
 	-ffreestanding       \
-	-mno-red-zone		 \
+	-mno-red-zone	 	\
+	-fno-pic -fpie		\
+	-mgeneral-regs-only	\
 	-fno-exceptions
 
 LDINTERNALFLAGS :=  \
@@ -41,11 +43,11 @@ $(TARGET): $(OFILES)
 	@echo [LD] $(TARGET)
 	@$(CC) $(LDINTERNALFLAGS) $(OFILES) -o $@
 
-src/arch/irq.o: src/arch/irq.c
-	@$(CC) $(CFLAGS) -I src/include/ -ffreestanding -mgeneral-regs-only -mno-red-zone -c $< -o $@
+#src/arch/irq.o: src/arch/irq.c
+#	@$(CC) $(CFLAGS) -I src/include/ -ffreestanding -mgeneral-regs-only -mno-red-zone -c $< -o $@
 
-src/arch/isr.o: src/arch/isr.c
-	@$(CC) $(CFLAGS) -I src/include/ -ffreestanding  -mgeneral-regs-onlys -mno-red-zone  -c $< -o $@
+#src/arch/isr.o: src/arch/isr.c
+#	@$(CC) $(CFLAGS) -I src/include/ -ffreestanding  -mgeneral-regs-onlys -mno-red-zone  -c $< -o $@
 
 %.o: %.c
 	@echo [CC] $@

@@ -1,6 +1,7 @@
 #include "arch/x86_64/idt.h"
 #include "arch/ports.h"
 #include "libk/utils.h"
+#include "libk/stdio.h"
 
 extern void irq0();
 extern void irq1();
@@ -75,13 +76,10 @@ void init_irq(){
 }
 
 void irq_handler(register_t* regs){
-	log(INFO, "IRQ %ul\n", regs->int_no);
     void (*handler)(register_t* regs);
     handler = interrupt_handlers[regs->int_no - 32];
     if(handler){
         handler(regs);
     }
-	else{
-		send_eoi(regs->int_no);
-	}
+	send_eoi(regs->int_no);
 }

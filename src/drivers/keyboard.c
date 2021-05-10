@@ -32,11 +32,11 @@ const char keyMap_shift[58] = {
 };
 
 /*keyboard IRQ handler*/                                                                                                                                                 
-void keyboard_handler(register_t* regs){                                                                                                                                                         
+void keyboard_handler(register_t* regs){
+  (void)regs;                                                                                                                                                         
   uint8_t scancode;                                                                                                                                                      
   scancode = inb(0x60); /*read from keyboard data port*/
   handleKey_normal(scancode);
-  send_eoi(regs->int_no);
 }
 
 /*translate a scancode to an ascii character*/

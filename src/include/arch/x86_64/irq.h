@@ -1,6 +1,9 @@
 #ifndef __IRQ_H__
 #define __IRQ_H__
 
+#define IRQ_START   asm("sti");
+#define IRQ_STOP    asm("cli");
+
 #include "arch/x86_64/regs.h"
 
 void init_irq();

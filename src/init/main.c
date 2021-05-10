@@ -36,22 +36,28 @@ SOFTWARE. */
 void kmain(struct stivale2_struct* bootinfo){
     init_tty(bootinfo);
     /*Gruvbox color scheme*/
-	init_colors(0x282828, 0xcc241d, 0x98971a, 0xd79921, 0x458588, 0xb16286, 0x689d6a, 0xa89984, 
-            0x928374, 0xfb4934, 0xb8bb26, 0xfabd2f, 0x83a598, 0xd8369b, 0x8ec07c, 0xebdbb2);
+	/*init_colors(0x282828, 0xcc241d, 0x98971a, 0xd79921, 0x458588, 0xb16286, 0x689d6a, 0xa89984, 
+            0x928374, 0xfb4934, 0xb8bb26, 0xfabd2f, 0x83a598, 0xd8369b, 0x8ec07c, 0xebdbb2);*/
 	/*Nord color scheme*/
-	/*init_colors(0x3B4252, 0xBF616A, 0xA3BE8C, 0xEBCB8B, 0x81A1C1, 0xB48EAD, 0x88C0D0, 0xE5E9F0,
-				0x4C566A, 0xBF616A, 0xA3BE8C, 0xEBCB8B, 0x81A1C1, 0xB48EAD, 0x8FBCBB, 0xECEFF4);*/
+	init_colors(0x3B4252, 0xBF616A, 0xA3BE8C, 0xEBCB8B, 0x81A1C1, 0xB48EAD, 0x88C0D0, 0xE5E9F0,
+				0x4C566A, 0xBF616A, 0xA3BE8C, 0xEBCB8B, 0x81A1C1, 0xB48EAD, 0x8FBCBB, 0xECEFF4);
     gdt_install();
 	init_idt();
 	init_isr();
 	init_irq();
 	keyboard_install();
-	pit_install();
+	pit_install(100);
+	IRQ_START;
 	init_pmm(bootinfo);    
 	printf("\nBootloader: %s\nBootloader Version: %s\n", bootinfo->bootloader_brand, bootinfo->bootloader_version);
 	printf("Total system memory: %ul KB\n", get_total_memory()/1024);
 	sysfetch();
+
+	while(1){
+		char c = keyboard_read();
+		putchar(c);
+	}
 	for(;;){
-		asm("sti;hlt");
+		asm ("hlt");
 	}
 }
