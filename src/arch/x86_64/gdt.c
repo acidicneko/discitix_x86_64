@@ -12,5 +12,5 @@ void gdt_install(){
     gdt.size = (sizeof(gdt_entry_t)*3) - 1;
     gdt.offset = (uint64_t)&gdt_entries;
     load_gdt(&gdt);
-	log(INFO, "GDT initialised\n");
+    log(INFO, "GDT initialised\n");
 }
