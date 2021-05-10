@@ -52,7 +52,7 @@ void kmain(struct stivale2_struct* bootinfo){
     printf("\nBootloader: %s\nBootloader Version: %s\n", bootinfo->bootloader_brand, bootinfo->bootloader_version);
     printf("Total system memory: %ul KB\n", get_total_memory()/1024);
     sysfetch();
-
+    printf("\033[33mayush@kernel\033[31m >>\033[0m ");
     while(1){
         char c = keyboard_read();
         putchar(c);
