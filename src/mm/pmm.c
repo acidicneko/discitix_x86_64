@@ -39,7 +39,16 @@ void init_pmm(struct stivale2_struct *bootinfo){
     init_bitmap(bitmap_size, largest_entry);
     uint64_t bitmap_pages = (page_bitmap.size / 4096) + 1;
     lock_pages(page_bitmap.buffer, bitmap_pages);
-    reserve_pages(0, 512);
+    
+    for(uint64_t i = 0; i < memory_map->entries; i++)
+    {
+        struct stivale2_mmap_entry* entry = (struct stivale2_mmap_entry*)&memory_map->memmap[i];
+        if(entry->type == STIVALE2_MMAP_BOOTLOADER_RECLAIMABLE || 
+            entry->type == STIVALE2_MMAP_KERNEL_AND_MODULES)
+        {
+                reserve_pages((void*)entry->base, entry->length/4096);
+        }
+    }
     log(INFO, "PMM initialised\n");
 }
 
