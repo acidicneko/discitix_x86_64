@@ -11,6 +11,7 @@ Join Discitix's own [Discord Server](https://discord.gg/6a9C3r2fGU)
 ## Discitix in action
 
 ![Settings Window](https://raw.githubusercontent.com/ayush7788/discitix_x86_64/main/images/prompt.png)
+![Settings Window](https://raw.githubusercontent.com/ayush7788/discitix_x86_64/main/images/serial.png)
 
 ### Features
 - [x] Port to x86_64
