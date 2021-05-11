@@ -49,6 +49,7 @@ void init_pmm(struct stivale2_struct *bootinfo){
                 reserve_pages((void*)entry->base, entry->length/4096);
         }
     }
+    dbgln("PMM initialied with %ul Bytes of memory\n\r", total_memory);
     log(INFO, "PMM initialised\n");
 }
 

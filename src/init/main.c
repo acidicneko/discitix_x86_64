@@ -35,6 +35,7 @@ SOFTWARE. */
 #include "libk/utils.h"
 
 void kmain(struct stivale2_struct* bootinfo){
+    serial_init(COM1_PORT);
     init_tty(bootinfo);
     /*Gruvbox color scheme*/
     /*init_colors(0x282828, 0xcc241d, 0x98971a, 0xd79921, 0x458588, 0xb16286, 0x689d6a, 0xa89984, 
@@ -48,12 +49,11 @@ void kmain(struct stivale2_struct* bootinfo){
     init_irq();
     keyboard_install();
     pit_install(100);
-    serial_init(COM1_PORT);
     IRQ_START;
     init_pmm(bootinfo);    
     printf("\nBootloader: %s\nBootloader Version: %s\n", bootinfo->bootloader_brand, bootinfo->bootloader_version);
     printf("Total system memory: %ul KB\n", get_total_memory()/1024);
-    
+    dbgln("Kernel initialised successfully!\n\r");
     sysfetch();
     while(1){
         char c = keyboard_read();

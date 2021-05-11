@@ -1,6 +1,7 @@
 #include "init/stivale2.h"
 #include <stdint.h>
 #include <stddef.h>
+#include "libk/utils.h"
 
 uint32_t* framebuffer_address = NULL;
 uint32_t framebuffer_width;
@@ -13,6 +14,7 @@ void init_framebuffer(struct stivale2_struct* bootinfo){
     framebuffer_height = fbtag->framebuffer_height;
     framebuffer_width = fbtag->framebuffer_width;
     framebuffer_bpp = fbtag->framebuffer_bpp;
+    dbgln("Framebuffer address: %xl\n\rHeight: %ui\n\rWidht: %ui\n\rBPP: %ui\n\r", fbtag->framebuffer_addr, framebuffer_height, framebuffer_width, framebuffer_bpp);
 }
 
 void framebuffer_put_pixel(int x_pos, uint32_t y_pos, uint32_t color){

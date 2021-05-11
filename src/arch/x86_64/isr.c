@@ -109,6 +109,7 @@ void init_isr(){
     idt_set_gate(30, (uint64_t)isr30, 0x08, 0x8E);
     idt_set_gate(31, (uint64_t)isr31, 0x08, 0x8E);
     log(INFO, "ISRs initialised\n");
+    dbgln("ISRs initialised\n\r");
 }
 
 void fault_handler(register_t* regs)

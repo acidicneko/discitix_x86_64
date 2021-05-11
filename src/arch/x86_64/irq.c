@@ -72,6 +72,7 @@ void init_irq(){
     idt_set_gate(45, (uint64_t)irq13, 0x08, 0x8E);
     idt_set_gate(46, (uint64_t)irq14, 0x08, 0x8E);
     idt_set_gate(47, (uint64_t)irq15, 0x08, 0x8E);
+    dbgln("IRQs initialised\n\r");
     log(INFO, "IRQs initialised\n");
 }
 
