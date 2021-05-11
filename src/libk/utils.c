@@ -1,5 +1,6 @@
 #include "libk/stdio.h"
 #include "libk/utils.h"
+#include "drivers/serial.h"
 
 void sysfetch(){
     printf("\033[34m ____  \n");
@@ -19,6 +20,13 @@ void log(int status, char *fmt, ...){
         printf("\033[31m[ERROR] \033[0m");
     va_list args;
     va_start(args, fmt);
-    vsprintf(fmt, args);
+    __vsprintf__(fmt, args, putchar, puts);
+    va_end(args);
+}
+
+void dbgln(char* fmt, ...){
+    va_list args;
+    va_start(args, fmt);
+    __vsprintf__(fmt, args, serial_putchar, serial_puts);
     va_end(args);
 }

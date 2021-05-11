@@ -6,7 +6,7 @@
 
 void putchar(char c);
 void puts(const char* str);
-int vsprintf(char *fmt, va_list args);
+int __vsprintf__(char *fmt, va_list args, void (*putchar_func)(char c), void (*puts_func)(const char *str));
 int printf(char *fmt, ...);
 
 #endif

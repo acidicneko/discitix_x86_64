@@ -8,6 +8,6 @@
 
 void sysfetch();
 void log(int status, char *fmt, ...);
-
+void dbgln(char* fmt, ...);
 
 #endif
