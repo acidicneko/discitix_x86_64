@@ -20,10 +20,14 @@ void reserve_pages(void* address, uint64_t count);
 void unreserve_page(void* address);
 void unreserve_pages(void* address, uint64_t count);
 
+void early_reserve_page(void* address);
+void early_reserve_pages(void* address, uint64_t count);
+
 void* request_page();
 
 uint64_t get_total_memory();
 uint64_t get_free_memory();
+uint64_t get_usable_memory();
 uint64_t get_used_memory();
 uint64_t get_reserved_memory();
 
