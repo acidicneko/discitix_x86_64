@@ -65,4 +65,11 @@ run:
 	@echo [RUN] $(IMAGE)
 	@qemu-system-x86_64 -hda image.hdd -m 128M
 
-all: clean $(IMAGE) run
+setup:
+	@echo Building and installing echFS utils
+	@make -C echfs
+	@make install -C echfs
+	@echo Building Limine
+	@make -C limine
+
+all: clean $(IMAGE) run setup
