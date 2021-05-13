@@ -2,8 +2,10 @@
 #include "drivers/serial.h"
 #include "libk/stdio.h"
 #include "libk/utils.h"
+#include <stdbool.h>
 
 uint16_t def_port = 0;
+bool initialized = false;
 
 int serial_init(uint16_t port){
     outb(port + 1, 0x00);
@@ -23,8 +25,13 @@ int serial_init(uint16_t port){
     
     outb(port + 4, 0x0F);
     def_port = port;
+    initialized = true;
     log(INFO, "Serial initliased\n");
     return 0;
+}
+
+bool is_serial_initialized(){
+    return initialized;
 }
 
 void serial_putchar(char c){

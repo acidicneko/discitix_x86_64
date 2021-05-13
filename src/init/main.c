@@ -52,7 +52,7 @@ void kmain(struct stivale2_struct* bootinfo){
     IRQ_START;
     init_pmm(bootinfo);    
     printf("\nBootloader: %s\nBootloader Version: %s\n", bootinfo->bootloader_brand, bootinfo->bootloader_version);
-    printf("Total system memory: %ul KB\n", get_total_memory()/1024);
+    printf("Total system memory: %ul KB\n", get_usable_memory()/1024);
     dbgln("Kernel initialised successfully!\n\r");
     sysfetch();
     while(1){

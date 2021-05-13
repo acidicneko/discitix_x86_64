@@ -14,7 +14,7 @@ void init_framebuffer(struct stivale2_struct* bootinfo){
     framebuffer_height = fbtag->framebuffer_height;
     framebuffer_width = fbtag->framebuffer_width;
     framebuffer_bpp = fbtag->framebuffer_bpp;
-    dbgln("Framebuffer address: %xl\n\rHeight: %ui\n\rWidht: %ui\n\rBPP: %ui\n\r", fbtag->framebuffer_addr, framebuffer_height, framebuffer_width, framebuffer_bpp);
+    dbgln("Framebuffer: address: 0x%xl\n\rFramebuffer: Height: %ui\n\rFramebuffer: Widht: %ui\n\rFramebuffer: BPP: %ui\n\r", fbtag->framebuffer_addr, framebuffer_height, framebuffer_width, framebuffer_bpp);
 }
 
 void framebuffer_put_pixel(int x_pos, uint32_t y_pos, uint32_t color){

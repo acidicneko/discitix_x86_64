@@ -1,27 +1,43 @@
 #include "mm/pmm.h"
 #include "mm/bitmap.h"
 #include "libk/stdio.h"
+#include "libk/string.h"
 #include "libk/utils.h"
 #include <stddef.h>
 
-uint64_t total_memory = 0;
-
 uint64_t usable_memory = 0;
-uint64_t free_memory = 0;
-uint64_t used_memory = 0;
-uint64_t reserved_memory = 0;
 
 bitmap_t page_bitmap;
 uint64_t next_free_bit = 0;
+uintptr_t highest_page;
+
+size_t align_up(size_t value, size_t align_to){
+    if((value % align_to) == 0) return value;
+    size_t diff = value % align_to;
+    value -= diff;
+    value += align_to;
+    return value;
+}
+
+size_t align_down(size_t value, size_t align_to){
+    if((value % align_to) == 0) return value;
+    size_t diff = value % align_to;
+    value -= diff;
+    return value;
+}
 
 void init_pmm(struct stivale2_struct *bootinfo){
     /*Get the memory map*/
+    uintptr_t topmost;
     struct stivale2_struct_tag_memmap* memory_map = (struct stivale2_struct_tag_memmap*)stivale2_get_tag(bootinfo, STIVALE2_STRUCT_TAG_MEMMAP_ID);
 
     for(size_t i = 0; i < memory_map->entries; i++){
         struct stivale2_mmap_entry* entry = (struct stivale2_mmap_entry*)&memory_map->memmap[i];
         dbgln("PMM: entry->base: 0x%xl, entry->length: %ul, entry->type: %ul\n\r", entry->base, entry->length, entry->type);
-        total_memory += entry->length;
+        topmost = entry->base + entry->length;
+        if(highest_page < topmost){
+            highest_page = topmost;
+        }
     }
 
     void* largest_entry = NULL;
@@ -42,99 +58,52 @@ void init_pmm(struct stivale2_struct *bootinfo){
         }
     }
 
-    free_memory = usable_memory;
-    size_t bitmap_size = (total_memory / 4096 / 8) + 1;
-    dbgln("PMM: initializing bitmap with size = %ul\n\r", (uint64_t)bitmap_size);
+    size_t temp = highest_page / PAGE_SIZE / 8;
+    size_t bitmap_size = align_up(temp, PAGE_SIZE);
+    dbgln("PMM: initializing bitmap with aligned size = %ul\n\rPMM: page_bitmap.buffer: 0x%xl\n\r", (uint64_t)bitmap_size, (uint64_t)largest_entry);
     init_bitmap(bitmap_size, largest_entry);
-    uint64_t bitmap_pages = (page_bitmap.size / 4096) + 1;
-    lock_pages(page_bitmap.buffer, bitmap_pages);
+    uint64_t bitmap_pages = page_bitmap.size / PAGE_SIZE;
+    lock_pages((void*)page_bitmap.buffer, bitmap_pages);
     
     for(uint64_t i = 0; i < memory_map->entries; i++)
     {
         struct stivale2_mmap_entry* entry = (struct stivale2_mmap_entry*)&memory_map->memmap[i];
-        if(entry->type != STIVALE2_MMAP_USABLE)
+        if(entry->type == STIVALE2_MMAP_USABLE)
         {
-            early_reserve_pages((void*)entry->base, entry->length/4096);
+            free_pages((void*)entry->base, entry->length/PAGE_SIZE);
         }
     }
-    early_reserve_page(0);
-    dbgln("PMM initialied with %ul Bytes(%ul MB) of total_memory\n\r%ul Bytes(%ul MB) of usable_memory\n\r", total_memory, total_memory/1024/1024, free_memory, free_memory/1024/1024);
-    log(INFO, "PMM initialised\n");
+    dbgln("PMM: initialized with %ul Bytes(%ul MB) of usable_memory\n\r", usable_memory, usable_memory/1024/1024);
+    log(INFO, "PMM initialized\n");
 }
 
 void init_bitmap(size_t size, void* buffer){
     page_bitmap.size = size;
     page_bitmap.buffer = (uint8_t*)buffer;
-    for(size_t i = 0; i < size; i++){
-        page_bitmap.buffer[i] = 0;
-    }
-}
-
-void early_reserve_page(void* address){
-    uint64_t index = (uint64_t)address / 4096;
-    if(find_bit(&page_bitmap, index) == true)	return;
-    set_bit(&page_bitmap, index, true);
-}
-
-void early_reserve_pages(void* address, uint64_t count){
-    for(uint64_t i = 0; i < count; i++){
-        early_reserve_page((void*)((uint64_t)address + (i*4096)));
-    }
+    memset(page_bitmap.buffer, 0xff, page_bitmap.size);
 }
 
 void lock_page(void* address){
-    uint64_t index = (uint64_t)address / 4096;
+    uint64_t index = (uint64_t)address / PAGE_SIZE;
     if(find_bit(&page_bitmap, index) == true)	return;
     set_bit(&page_bitmap, index, true);
-    free_memory -= 4096;
-    used_memory += 4096;
 }
 
 void lock_pages(void* address, uint64_t count){
     for(uint64_t i = 0; i < count; i++){
-        lock_page((void*)((uint64_t)address + (i*4096)));
+        lock_page((void*)((uint64_t)address + (i*PAGE_SIZE)));
     }
 }
 
 void free_page(void* address){
-    uint64_t index = (uint64_t)address / 4096;
+    uint64_t index = (uint64_t)address / PAGE_SIZE;
     if(find_bit(&page_bitmap, index) == false)	return;
     set_bit(&page_bitmap, index, false);
-    free_memory += 4096;
-    used_memory -= 4096;
 }
 
 void free_pages(void* address, uint64_t count){
     for(uint64_t i = 0; i < count; i++){
-        free_page((void*)((uint64_t)address + (i*4096)));
-    }
-}
-
-void reserve_page(void* address){
-    uint64_t index = (uint64_t)address / 4096;
-    if(find_bit(&page_bitmap, index) == true)	return;
-    set_bit(&page_bitmap, index, true);
-    reserved_memory += 4096;
-    free_memory -= 4096;
-}
-
-void reserve_pages(void* address, uint64_t count){
-    for(uint64_t i = 0; i < count; i++){
-        reserve_page((void*)((uint64_t)address + (i*4096)));
-    }
-}
-
-void unreserve_page(void* address){
-    uint64_t index = (uint64_t)address / 4096;
-    if(find_bit(&page_bitmap, index) == true)	return;
-    set_bit(&page_bitmap, index, true);
-    reserved_memory -= 4096;
-    free_memory += 4096;
-}
-
-void unreserve_pages(void* address, uint64_t count){
-    for(uint64_t i = 0; i < count; i++){
-        unreserve_page((void*)((uint64_t)address + (i*4096)));
+        free_page((void*)((uint64_t)address + (i*PAGE_SIZE)));
     }
 }
 
@@ -143,28 +112,12 @@ void* request_page(){
     /*FIXME!!*/
     for(uint64_t i = 0; i < page_bitmap.size * 8; i++){
         if(find_bit(&page_bitmap, i) == true) continue;
-        lock_page((void*)(i*4096));
-        return (void*)(i*4096);
+        lock_page((void*)(i*PAGE_SIZE));
+        return (void*)(i*PAGE_SIZE);
     }
     return NULL;
 }
 
-uint64_t get_total_memory(){
-    return total_memory;
-}
-
-uint64_t get_free_memory(){
-    return free_memory;
-}
-
 uint64_t get_usable_memory(){
     return usable_memory;
-}
-
-uint64_t get_used_memory(){
-    return used_memory;
-}
-
-uint64_t get_reserved_memory(){
-    return reserved_memory;
 }

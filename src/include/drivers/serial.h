@@ -6,8 +6,10 @@
 
 #include <stdint.h>
 #include <stdarg.h>
+#include <stdbool.h>
 
 int serial_init(uint16_t port);
+bool is_serial_initialized();
 void serial_write(const char* data);
 void serial_putchar(char c);
 void serial_puts(const char* str);
