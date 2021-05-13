@@ -22,7 +22,7 @@ OFILES = $(CFILES:.c=.o) $(ASMFILES:.asm=.o)
 TARGET = kernel.elf
 IMAGE = image.hdd
 
-.PHONY: clean all
+.PHONY: clean all setup
 
 $(IMAGE): $(TARGET)
 	@echo [PARTED] $(IMAGE)
@@ -72,4 +72,4 @@ setup:
 	@echo Building Limine
 	@make -C limine
 
-all: clean $(IMAGE) run setup
+all: clean $(IMAGE) run

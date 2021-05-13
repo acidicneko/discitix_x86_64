@@ -1,5 +1,6 @@
 #include "libk/stdio.h"
 #include "libk/utils.h"
+#include "libk/string.h"
 #include "drivers/serial.h"
 #include "mm/pmm.h"
 
@@ -7,7 +8,7 @@ void sysfetch(){
     printf("\033[34m ____  \n");
     printf("\033[34m|  _ \\\t\033[1;37mKernel: \033[0mDiscitix\n");
     printf("\033[34m| | | |\t\033[1;37mBuild: \033[0m%s\n", __DATE__);
-    printf("\033[34m| |_| |\t\033[1;37mMemory: %ulM\033[0m\n", get_usable_memory()/1024/1024);
+    printf("\033[34m| |_| |\t\033[1;37mMemory: \033[0m%ulM\n", get_usable_memory()/1024/1024);
     printf("\033[34m|____/\n\033[0m\n");
 
     printf("\033[40m  \033[41m  \033[42m  \033[43m  \033[44m  \033[45m  \033[46m  \033[47m  \n");
@@ -31,4 +32,24 @@ void dbgln(char* fmt, ...){
     va_start(args, fmt);
     __vsprintf__(fmt, args, serial_putchar, serial_puts);
     va_end(args);
+}
+
+char* kernel_argv[128];
+int kernel_argc = 0;
+
+void init_arg_parser(struct stivale2_struct* bootinfo){
+    struct stivale2_struct_tag_cmdline* cmdline = (struct stivale2_struct_tag_cmdline*)stivale2_get_tag(bootinfo, STIVALE2_STRUCT_TAG_CMDLINE_ID);
+    char* cmdline_str = (char*)cmdline->cmdline;
+    kernel_argv[kernel_argc] = strtok(cmdline_str, " ");
+    while(kernel_argv[kernel_argc]){
+        kernel_argc++;
+        kernel_argv[kernel_argc] = strtok(0, " ");
+    }
+}
+
+int arg_exist(char* arg){
+    for(int i = 0; i < kernel_argc; i++){
+        if(!strcmp(arg, kernel_argv[i])) return 1;
+    }
+    return 0;
 }
