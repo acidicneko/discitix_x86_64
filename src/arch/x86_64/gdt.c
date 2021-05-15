@@ -13,5 +13,4 @@ void gdt_install(){
     gdt.offset = (uint64_t)&gdt_entries;
     load_gdt(&gdt);
     dbgln("GDT Loaded\n\r");
-    log(INFO, "GDT initialised\n");
 }

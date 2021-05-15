@@ -22,5 +22,4 @@ void init_idt(){
     memset(&idt_entries, 0, sizeof(idt_entry_t)*256);
     asm volatile("lidt %0" : : "m"(idt));
     dbgln("IDT loaded\n\r");
-    log(INFO, "IDT initialised\n");
 }

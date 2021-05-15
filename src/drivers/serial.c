@@ -19,14 +19,12 @@ int serial_init(uint16_t port){
     outb(port + 0, 0xAE);
 
     if(inb(port) != 0xAE){
-        log(ERROR, "Serial initliasation failed!\n");
         return 1;
     }
     
     outb(port + 4, 0x0F);
     def_port = port;
     initialized = true;
-    log(INFO, "Serial initliased\n");
     return 0;
 }
 

@@ -23,7 +23,6 @@ void pit_install(uint16_t hertz){
     irq_install_handler(0, pit_handler);
     set_frequency(hertz);
     dbgln("PIT initialised at %us Hertz\n\r", hertz);
-    log(INFO, "PIT initialised\n");
 }
 
 void pit_wait(int ticks){

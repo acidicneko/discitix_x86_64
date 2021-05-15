@@ -108,13 +108,13 @@ void init_isr(){
     idt_set_gate(29, (uint64_t)isr29, 0x08, 0x8E);
     idt_set_gate(30, (uint64_t)isr30, 0x08, 0x8E);
     idt_set_gate(31, (uint64_t)isr31, 0x08, 0x8E);
-    log(INFO, "ISRs initialised\n");
     dbgln("ISRs initialised\n\r");
 }
 
 void fault_handler(register_t* regs)
 {
     if (regs->int_no < 32){    
+        dbgln("Exception Raised! %s exception. Error code: %d\n\rSystem Halted!\n\r", exception_messages[regs->int_no], regs->int_no);
         log(ERROR, "Exception Raised! %s exception. Error code: %d\nSystem Halted!\n", exception_messages[regs->int_no], regs->int_no);/*raise an error*/
         printf("rax: 0x%xl\trbx: 0x%xl\trcx: 0x%xl\nrdx: 0x%xl\trdi: 0x%xl\trbp: 0x%xl\n", regs->rax, regs->rbx, regs->rcx, regs->rdx, regs->rdi, regs->rbp);
         for (;;);   /*halt the system*/

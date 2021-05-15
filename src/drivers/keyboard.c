@@ -97,5 +97,4 @@ char keyboard_read(){               /*reads a single character from keyboard*/
 void keyboard_install(void){        /*keyboard installer function*/
   irq_install_handler(1, keyboard_handler); /*register the handler for IRQ1, keyboard IRQ*/
   dbgln("Keyboard initialised\n\r");
-  log(INFO, "Keyboard Installed\n");        /*notify that keyboard has been installed*/
 }
