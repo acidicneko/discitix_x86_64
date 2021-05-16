@@ -39,7 +39,7 @@ void make_index(indexer_t* indexer, uint64_t virtual_addr){
     indexer->page_dir_ptr_index = virtual_addr & 0x1ff;
 }
 
-void switch_page_map(uint64_t page_map){
+void switch_page_map(page_table_t* page_map){
    asm("mov %0, %%cr3" : : "r"(page_map));
    
 }
@@ -106,13 +106,18 @@ void init_vmm(){
     PML4 = (page_table_t*)request_page();
     memset(PML4, 0, PAGE_SIZE);
 
+    dbgln("VMM: mapping physical memory to virtual at offset = 0x%xl\n\r", (uint64_t)KERNEL_OFFSET);
+    for (uintptr_t i = 0; i < 0x80000000; i += PAGE_SIZE){
+        map_page((void*)i, (void*)(i + KERNEL_OFFSET));
+    }
+
     dbgln("VMM: mapping physical memory to virtual at offset = 0x%xl\n\r", (uint64_t)VIRT_OFFSET);
-    for(uintptr_t i = 0; i < align_up(highest_page, PAGE_SIZE) - PAGE_SIZE; i += PAGE_SIZE){
+    for(uintptr_t i = 0; i < 0x100000000; i += PAGE_SIZE){
         map_page((void*)i, (void*)(i + VIRT_OFFSET));
     }
 
     dbgln("VMM: switching pagemap on CR3\n\r");
-    switch_page_map((uint64_t)PML4);
+    switch_page_map(PML4);
 
     dbgln("VMM: initalized\n\r");
 }

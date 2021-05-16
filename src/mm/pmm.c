@@ -74,7 +74,6 @@ void init_pmm(struct stivale2_struct *bootinfo){
         }
     }
     dbgln("PMM: initialized with %ul Bytes(%ul MB) of usable_memory\n\r", usable_memory, usable_memory/1024/1024);
-    log(INFO, "PMM initialized\n");
 }
 
 void init_bitmap(size_t size, void* buffer){

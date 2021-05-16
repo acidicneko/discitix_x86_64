@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#define KERNEL_OFFSET 0xffffffff80000000
 #define VIRT_OFFSET 0xffff800000000000
 
 typedef enum {
@@ -44,7 +45,7 @@ uint64_t get_address(page_dir_entry_t* entry);
 
 void make_index(indexer_t* indexer, uint64_t virtual_addr);
 
-void switch_page_map(uint64_t page_map);
+void switch_page_map(page_table_t* page_map);
 void init_vmm();
 void map_page(void* physical_addr, void* virtual_addr);
 

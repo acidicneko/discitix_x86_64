@@ -64,11 +64,11 @@ void init_kernel(struct stivale2_struct* bootinfo){
 
 void kmain(struct stivale2_struct* bootinfo){
     init_kernel(bootinfo);
-    sysfetch();
-    while(1){
+    //sysfetch();
+    /*while(1){
         char c = keyboard_read();
         putchar(c);
-    }
+    }*/
     for(;;){
         asm ("hlt");
     }

@@ -114,9 +114,9 @@ void init_isr(){
 void fault_handler(register_t* regs)
 {
     if (regs->int_no < 32){    
-        dbgln("Exception Raised! %s exception. Error code: %d\n\rSystem Halted!\n\r", exception_messages[regs->int_no], regs->int_no);
-        log(ERROR, "Exception Raised! %s exception. Error code: %d\nSystem Halted!\n", exception_messages[regs->int_no], regs->int_no);/*raise an error*/
-        printf("rax: 0x%xl\trbx: 0x%xl\trcx: 0x%xl\nrdx: 0x%xl\trdi: 0x%xl\trbp: 0x%xl\n", regs->rax, regs->rbx, regs->rcx, regs->rdx, regs->rdi, regs->rbp);
+        dbgln("Exception Raised! %s exception. Error code: %ul\n\rSystem Halted!\n\r", exception_messages[regs->int_no], regs->err_code);
+        //log(ERROR, "Exception Raised! %s exception. Error code: %d\nSystem Halted!\n", exception_messages[regs->int_no], regs->int_no);/*raise an error*/
+        //printf("rax: 0x%xl\trbx: 0x%xl\trcx: 0x%xl\nrdx: 0x%xl\trdi: 0x%xl\trbp: 0x%xl\n", regs->rax, regs->rbx, regs->rcx, regs->rdx, regs->rdi, regs->rbp);
         for (;;);   /*halt the system*/
     }
 }
