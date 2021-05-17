@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include "arch/x86_64/regs.h"
 
 #define KERNEL_OFFSET 0xffffffff80000000
 #define VIRT_OFFSET 0xffff800000000000
@@ -44,6 +45,8 @@ void set_address(page_dir_entry_t* entry, uint64_t address);
 uint64_t get_address(page_dir_entry_t* entry);
 
 void make_index(indexer_t* indexer, uint64_t virtual_addr);
+
+void page_fault_handler(register_t* regs);
 
 void switch_page_map(page_table_t* page_map);
 void init_vmm();

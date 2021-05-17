@@ -1,3 +1,4 @@
+#include "arch/x86_64/isr.h"
 #include "mm/vmm.h"
 #include "mm/pmm.h"
 #include "libk/string.h"
@@ -40,8 +41,8 @@ void make_index(indexer_t* indexer, uint64_t virtual_addr){
 }
 
 void switch_page_map(page_table_t* page_map){
-   asm("mov %0, %%cr3" : : "r"(page_map));
-   
+    //asm("mov %0, %%cr3" : : "r"(page_map));
+    asm volatile ("movq %0, %%cr3" :: "r" ((uint64_t)page_map) : "memory");
 }
 
 void map_page(void* physical_addr, void* virtual_addr){
@@ -100,6 +101,20 @@ void map_page(void* physical_addr, void* virtual_addr){
     set_flag(&PDE, present, true);
     set_flag(&PDE, rw, true);
     PT->entries[indexer.page_index] = PDE;
+    //asm volatile("invlpg (%0)" ::"r" (virtual_addr) : "memory");
+}
+
+void page_fault_handler(register_t* regs){
+    //uint64_t faulting_addr;
+    //asm("movl %%cr2, %0" : "=r"(faulting_addr));
+
+    dbgln("Page Fault occured!\n\r");
+    if(regs->err_code & (1<<1)) { dbgln("present\n\r"); }
+    if(regs->err_code & (1<<2)) { dbgln("read-only\n\r"); }
+    if(regs->err_code & (1<<4)) { dbgln("user-mode\n\r"); }
+    if(regs->err_code & (1<<8)) { dbgln("reserved\n\r"); }
+
+    //dbgln("Fault address: 0x%xi\n\r", faulting_addr);
 }
 
 void init_vmm(){
@@ -112,12 +127,13 @@ void init_vmm(){
     }
 
     dbgln("VMM: mapping physical memory to virtual at offset = 0x%xl\n\r", (uint64_t)VIRT_OFFSET);
-    for(uintptr_t i = 0; i < 0x100000000; i += PAGE_SIZE){
+    for(uintptr_t i = 0; i < align_down(highest_page, PAGE_SIZE); i += PAGE_SIZE){
         map_page((void*)i, (void*)(i + VIRT_OFFSET));
     }
-
+    isr_install_handler(14, page_fault_handler);
+    dbgln("VMM: PML4 address: 0x%xl\n\r", (uint64_t)PML4);
     dbgln("VMM: switching pagemap on CR3\n\r");
     switch_page_map(PML4);
 
-    dbgln("VMM: initalized\n\r");
+    dbgln("VMM: initialized\n\r");
 }

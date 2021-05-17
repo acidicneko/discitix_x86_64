@@ -39,6 +39,16 @@ void init_kernel(struct stivale2_struct* bootinfo){
     init_arg_parser(bootinfo);
     if(!arg_exist("noserial")){ serial_init(COM1_PORT); }
     
+    
+    gdt_install();
+    init_idt();
+    init_isr();
+    init_irq();
+    keyboard_install();
+    //pit_install(100);
+    IRQ_START;
+    init_pmm(bootinfo); 
+    init_vmm();   
     /*init_tty(bootinfo);
     if(arg_exist("gruvbox")){
         init_colors(0x282828, 0xcc241d, 0x98971a, 0xd79921, 0x458588, 0xb16286, 0x689d6a, 0xa89984, 
@@ -48,15 +58,6 @@ void init_kernel(struct stivale2_struct* bootinfo){
         init_colors(0x3B4252, 0xBF616A, 0xA3BE8C, 0xEBCB8B, 0x81A1C1, 0xB48EAD, 0x88C0D0, 0xE5E9F0,
                     0x4C566A, 0xBF616A, 0xA3BE8C, 0xEBCB8B, 0x81A1C1, 0xB48EAD, 0x8FBCBB, 0xECEFF4);
     }*/
-    gdt_install();
-    init_idt();
-    init_isr();
-    init_irq();
-    keyboard_install();
-    pit_install(100);
-    IRQ_START;
-    init_pmm(bootinfo); 
-    init_vmm();   
     /*printf("\nBootloader: %s\nBootloader Version: %s\n", bootinfo->bootloader_brand, bootinfo->bootloader_version);
     printf("Total system memory: %ul KB\n", get_usable_memory()/1024);*/
     dbgln("Kernel initialised successfully!\n\r");
