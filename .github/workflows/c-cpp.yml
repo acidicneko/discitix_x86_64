@@ -13,5 +13,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: setup
+      run: apt install nasm uuid-dev libfuse-dev pkg-config && make setup
     - name: make
       run: make
