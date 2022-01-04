@@ -18,6 +18,6 @@ typedef struct{
 } __attribute__((packed)) gdt_descriptor_t;
 
 extern void load_gdt(gdt_descriptor_t* gdt);
-void gdt_install();
+void init_gdt();
 
 #endif

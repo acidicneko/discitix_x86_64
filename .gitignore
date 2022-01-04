@@ -1,5 +1,4 @@
 .vscode/*
 *.o
-image.hdd
-kernel.elf
-limine_bak/*
+build/image.hdd
+build/kernel.elf

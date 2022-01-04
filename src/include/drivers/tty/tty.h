@@ -19,6 +19,7 @@ void init_colors(uint32_t black, uint32_t red, uint32_t green, uint32_t yellow, 
 void tty_paint_cell(terminal_cell_t cell);
 void tty_putchar_raw(char c);
 void tty_putchar(char c);
+void tty_paint_cursor(uint32_t x, uint32_t y);
 
 void set_currentFg(uint32_t value);
 void set_currentBg(uint32_t value);

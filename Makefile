@@ -5,11 +5,12 @@ INTERNALCFLAGS  :=       \
 	-ffreestanding       \
 	-mno-red-zone	 	\
 	-fno-pic -fpie		\
+	-fno-stack-protector \
 	-mgeneral-regs-only	\
 	-fno-exceptions
 
 LDINTERNALFLAGS :=  \
-	-Tlinker.ld \
+	-Tmisc/linker.ld \
 	-nostdlib   \
 	-shared     \
 	-pie -fno-pic -fpie \
@@ -18,9 +19,10 @@ LDINTERNALFLAGS :=  \
 CFILES = $(shell find src/ -type f -name '*.c')
 ASMFILES = $(shell find src/ -type f -name '*.asm')
 OFILES = $(CFILES:.c=.o) $(ASMFILES:.asm=.o)
+INITRD_FILES = misc/initrd/arru.txt arru.txt misc/initrd/hello.txt hello.txt misc/initrd/uname.txt uname.txt
 
-TARGET = kernel.elf
-IMAGE = image.hdd
+TARGET = build/kernel.elf
+IMAGE = build/image.hdd
 
 .PHONY: clean all setup
 
@@ -31,8 +33,11 @@ $(IMAGE): $(TARGET)
 	@parted -s $(IMAGE) mkpart primary 2048s 100%
 	@echo [ECHFS] $(IMAGE)
 	@echfs-utils -g -p0 $(IMAGE) quick-format 512
-	@echfs-utils -g -p0 $(IMAGE) import limine.cfg limine.cfg
-	@echfs-utils -g -p0 $(IMAGE) import $(TARGET) $(TARGET)
+	@echfs-utils -g -p0 $(IMAGE) import misc/limine.cfg limine.cfg
+	@echfs-utils -g -p0 $(IMAGE) import $(TARGET) kernel.elf
+	@echo [ARRUFS]
+	@./misc/initrd/arru-util misc/initrd/initrd.img write $(INITRD_FILES)
+	@echfs-utils -g -p0 $(IMAGE) import misc/initrd/initrd.img initrd.img
 	@echo [LIMINE] $(IMAGE)
 	@./limine/limine-install $(IMAGE)
 	@echo [ECHFS] $(IMAGE)
@@ -42,12 +47,6 @@ $(IMAGE): $(TARGET)
 $(TARGET): $(OFILES)
 	@echo [LD] $(TARGET)
 	@$(CC) $(LDINTERNALFLAGS) $(OFILES) -o $@
-
-#src/arch/irq.o: src/arch/irq.c
-#	@$(CC) $(CFLAGS) -I src/include/ -ffreestanding -mgeneral-regs-only -mno-red-zone -c $< -o $@
-
-#src/arch/isr.o: src/arch/isr.c
-#	@$(CC) $(CFLAGS) -I src/include/ -ffreestanding  -mgeneral-regs-onlys -mno-red-zone  -c $< -o $@
 
 %.o: %.c
 	@echo [CC] $@
@@ -63,7 +62,7 @@ clean:
 
 run:
 	@echo [RUN] $(IMAGE)
-	@qemu-system-x86_64 -hda image.hdd -m 128M
+	@qemu-system-x86_64 -hda $(IMAGE) -m 128M
 
 setup:
 	@echo Building and installing echFS utils

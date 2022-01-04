@@ -8,7 +8,7 @@ gdt_entry_t gdt_entries[3] = {
 };
 gdt_descriptor_t gdt;
 
-void gdt_install(){
+void init_gdt(){
     gdt.size = (sizeof(gdt_entry_t)*3) - 1;
     gdt.offset = (uint64_t)&gdt_entries;
     load_gdt(&gdt);

@@ -1,8 +1,8 @@
 #include "drivers/tty/tty.h"
 #include "libk/stdio.h"
 #include "libk/string.h"
-
-
+#include "drivers/pit.h"
+#include "drivers/keyboard.h"
 
 void putchar(char c){
     tty_putchar(c);
@@ -118,4 +118,30 @@ int printf(char *fmt, ...){
     __vsprintf__(fmt, args, putchar, puts);
     va_end(args);
     return 0;
+}
+
+void gets(char *to){
+    char c;
+    int index = 0;
+    while(1){
+        c = keyboard_read();
+        if(c == '\b'){
+            if(index != 0) index--;
+            putchar(c);
+        }
+        else if(c == '\n'){
+            to[index] = '\0';
+            putchar(c);
+            return;
+        }
+        else {
+            to[index++] = c;
+            putchar(c);
+        } 
+    }
+}
+
+void wait(uint16_t ms){
+    int required_ticks = ms*get_ticks();
+    pit_wait(required_ticks);
 }
