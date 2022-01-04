@@ -1,8 +1,8 @@
-#include "arch/x86_64/idt.h"
-#include "arch/x86_64/isr.h"
-#include "libk/stdio.h"
-#include "libk/utils.h"
-#include "libk/string.h"
+#include <arch/x86_64/idt.h>
+#include <arch/x86_64/isr.h>
+#include <libk/stdio.h>
+#include <libk/utils.h>
+#include <libk/string.h>
 
 extern void isr0();
 extern void isr1();

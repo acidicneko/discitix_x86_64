@@ -1,7 +1,7 @@
-#include "arch/x86_64/idt.h"
-#include "arch/ports.h"
-#include "libk/string.h"
-#include "libk/utils.h"
+#include <arch/x86_64/idt.h>
+#include <arch/ports.h>
+#include <libk/string.h>
+#include <libk/utils.h>
 
 idt_entry_t idt_entries[256];
 idt_desc_t idt;

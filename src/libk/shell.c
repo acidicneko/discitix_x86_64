@@ -1,8 +1,8 @@
-#include "libk/shell.h"
-#include "libk/stdio.h"
-#include "libk/string.h"
-#include "libk/utils.h"
-#include "fs/initrd.h"
+#include <libk/shell.h>
+#include <libk/stdio.h>
+#include <libk/string.h>
+#include <libk/utils.h>
+#include <fs/initrd.h>
 
 void execute(char** argv, int argc){
     if(!strcmp(argv[0], "uname")){

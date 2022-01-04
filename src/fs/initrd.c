@@ -1,8 +1,8 @@
-#include "libk/stdio.h"
-#include "fs/initrd.h"
-#include "libk/string.h"
-#include "init/stivale2.h"
-#include "mm/pmm.h"
+#include <libk/stdio.h>
+#include <fs/initrd.h>
+#include <libk/string.h>
+#include <init/stivale2.h>
+#include <mm/pmm.h>
 
 uint64_t initrd_location;
 initrd_header_t* header;

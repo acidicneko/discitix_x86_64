@@ -1,8 +1,8 @@
-#include "libk/stdio.h"
-#include "libk/utils.h"
-#include "libk/string.h"
-#include "drivers/serial.h"
-#include "mm/pmm.h"
+#include <libk/stdio.h>
+#include <libk/utils.h>
+#include <libk/string.h>
+#include <drivers/serial.h>
+#include <mm/pmm.h>
 
 void sysfetch(){
     printf("\033[34m ____  \n");

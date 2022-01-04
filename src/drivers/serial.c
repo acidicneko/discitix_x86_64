@@ -1,7 +1,7 @@
-#include "arch/ports.h"
-#include "drivers/serial.h"
-#include "libk/stdio.h"
-#include "libk/utils.h"
+#include <arch/ports.h>
+#include <drivers/serial.h>
+#include <libk/stdio.h>
+#include <libk/utils.h>
 #include <stdbool.h>
 
 uint16_t def_port = 0;

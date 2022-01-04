@@ -1,7 +1,7 @@
-#include "arch/x86_64/idt.h"
-#include "arch/ports.h"
-#include "libk/utils.h"
-#include "libk/stdio.h"
+#include <arch/x86_64/idt.h>
+#include <arch/ports.h>
+#include <libk/utils.h>
+#include <libk/stdio.h>
 
 extern void irq0();
 extern void irq1();

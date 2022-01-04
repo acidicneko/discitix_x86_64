@@ -1,7 +1,7 @@
 #ifndef __FRAMEBUFFER_H__
 #define __FRAMEBUFFER_H__
 
-#include "init/stivale2.h"
+#include <init/stivale2.h>
 
 
 typedef struct {

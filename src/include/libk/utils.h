@@ -5,7 +5,7 @@
 #define INFO	1
 
 #include <stdarg.h>
-#include "init/stivale2.h"
+#include <init/stivale2.h>
 
 void sysfetch();
 void log(int status, char *fmt, ...);

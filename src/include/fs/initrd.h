@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include "init/stivale2.h"
+#include <init/stivale2.h>
 
 #define ARRU_MAGIC 0x69
 

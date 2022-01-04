@@ -20,21 +20,21 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-#include "arch/x86_64/gdt.h"
-#include "arch/x86_64/idt.h"
-#include "arch/x86_64/irq.h"
-#include "arch/x86_64/isr.h"
-#include "init/stivale2.h"
-#include "drivers/tty/tty.h"
-#include "drivers/keyboard.h"
-#include "drivers/pit.h"
-#include "drivers/serial.h"
-#include "mm/pmm.h"
-#include "mm/vmm.h"
-#include "libk/stdio.h"
-#include "libk/utils.h"
-#include "libk/shell.h"
-#include "fs/initrd.h"
+#include <arch/x86_64/gdt.h>
+#include <arch/x86_64/idt.h>
+#include <arch/x86_64/irq.h>
+#include <arch/x86_64/isr.h>
+#include <init/stivale2.h>
+#include <drivers/tty/tty.h>
+#include <drivers/keyboard.h>
+#include <drivers/pit.h>
+#include <drivers/serial.h>
+#include <mm/pmm.h>
+#include <mm/vmm.h>
+#include <libk/stdio.h>
+#include <libk/utils.h>
+#include <libk/shell.h>
+#include <fs/initrd.h>
 
 void init_kernel(struct stivale2_struct* bootinfo){
     init_arg_parser(bootinfo);

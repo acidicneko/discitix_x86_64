@@ -2,7 +2,7 @@
 #define __TTY_H__
 
 #include <stdint.h>
-#include "init/stivale2.h"
+#include <init/stivale2.h>
 
 typedef struct{
     char printable_char;

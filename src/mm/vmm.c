@@ -1,8 +1,8 @@
-#include "arch/x86_64/isr.h"
-#include "mm/vmm.h"
-#include "mm/pmm.h"
-#include "libk/string.h"
-#include "libk/utils.h"
+#include <arch/x86_64/isr.h>
+#include <mm/vmm.h>
+#include <mm/pmm.h>
+#include <libk/string.h>
+#include <libk/utils.h>
 
 page_table_t* PML4 = NULL;
 

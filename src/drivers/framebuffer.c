@@ -1,7 +1,7 @@
-#include "drivers/framebuffer.h"
+#include <drivers/framebuffer.h>
 #include <stdint.h>
 #include <stddef.h>
-#include "libk/utils.h"
+#include <libk/utils.h>
 
 fb_info_t fb_info;
 

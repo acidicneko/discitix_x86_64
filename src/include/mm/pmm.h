@@ -4,7 +4,7 @@
 #define PAGE_SIZE   0x1000
 
 #include <stdint.h>
-#include "init/stivale2.h"
+#include <init/stivale2.h>
 #include <stddef.h>
 
 extern uintptr_t highest_page;

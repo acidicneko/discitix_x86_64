@@ -1,8 +1,8 @@
-#include "drivers/tty/tty.h"
-#include "libk/stdio.h"
-#include "libk/string.h"
-#include "drivers/pit.h"
-#include "drivers/keyboard.h"
+#include <drivers/tty/tty.h>
+#include <libk/stdio.h>
+#include <libk/string.h>
+#include <drivers/pit.h>
+#include <drivers/keyboard.h>
 
 void putchar(char c){
     tty_putchar(c);

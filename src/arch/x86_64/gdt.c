@@ -1,5 +1,5 @@
-#include "arch/x86_64/gdt.h"
-#include "libk/utils.h"
+#include <arch/x86_64/gdt.h>
+#include <libk/utils.h>
 
 gdt_entry_t gdt_entries[3] = {
     {0, 0, 0, 0x00, 0x00, 0}, /* Kernel NULL Segment*/

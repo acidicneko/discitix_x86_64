@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include "arch/x86_64/regs.h"
+#include <arch/x86_64/regs.h>
 
 #define KERNEL_OFFSET 0xffffffff80000000
 #define VIRT_OFFSET 0xffff800000000000

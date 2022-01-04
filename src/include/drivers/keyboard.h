@@ -7,7 +7,7 @@
 #define RIGHT_SHIFT_RELEASED 	0xB6
 #define CAPS_LOCK 				0x3A
 
-#include "arch/x86_64/regs.h"
+#include <arch/x86_64/regs.h>
 #include <stdint.h>
 
 void keyboard_install(void);

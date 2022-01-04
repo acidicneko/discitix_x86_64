@@ -1,8 +1,8 @@
-#include "arch/x86_64/irq.h"
-#include "arch/ports.h"
-#include "drivers/keyboard.h"
-#include "libk/stdio.h"
-#include "libk/utils.h"
+#include <arch/x86_64/irq.h>
+#include <arch/ports.h>
+#include <drivers/keyboard.h>
+#include <libk/stdio.h>
+#include <libk/utils.h>
 
 // keyboard buffer handling
 char buf_char;

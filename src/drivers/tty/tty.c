@@ -1,8 +1,8 @@
 #include <stddef.h>
-#include "drivers/tty/tty.h"
-#include "drivers/tty/font.h"
-#include "drivers/tty/hansi_parser.h"
-#include "drivers/framebuffer.h"
+#include <drivers/tty/tty.h>
+#include <drivers/tty/font.h>
+#include <drivers/tty/hansi_parser.h>
+#include <drivers/framebuffer.h>
 
 uint32_t colors[16];
 
