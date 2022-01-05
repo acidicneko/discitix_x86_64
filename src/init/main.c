@@ -47,8 +47,9 @@ void init_kernel(struct stivale2_struct* bootinfo){
     keyboard_install();
     pit_install(100);
     IRQ_START;
-    init_pmm(bootinfo);   
     init_tty(bootinfo);
+    init_pmm(bootinfo);
+    init_vmm();   
     if(arg_exist("gruvbox")){
         init_colors(0x282828, 0xcc241d, 0x98971a, 0xd79921, 0x458588, 0xb16286, 0x689d6a, 0xa89984, 
                     0x928374, 0xfb4934, 0xb8bb26, 0xfabd2f, 0x83a598, 0xd8369b, 0x8ec07c, 0xebdbb2);
@@ -58,7 +59,6 @@ void init_kernel(struct stivale2_struct* bootinfo){
                     0x4C566A, 0xBF616A, 0xA3BE8C, 0xEBCB8B, 0x81A1C1, 0xB48EAD, 0x8FBCBB, 0xECEFF4);
     }
     printf("\nBootloader: %s\nBootloader Version: %s\n", bootinfo->bootloader_brand, bootinfo->bootloader_version);
-    printf("Total system memory: %ul KB\n", get_usable_memory()/1024);
     init_initrd(bootinfo);
     dbgln("Kernel initialised successfully!\n\r");
 }
@@ -66,8 +66,7 @@ void init_kernel(struct stivale2_struct* bootinfo){
 void kmain(struct stivale2_struct* bootinfo){
     init_kernel(bootinfo);
     sysfetch();
-    init_shell();
-    
+    //init_shell();
     for(;;){
         asm ("hlt");
     }

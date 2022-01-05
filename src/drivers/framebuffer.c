@@ -1,4 +1,5 @@
 #include <drivers/framebuffer.h>
+#include <mm/pmm.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <libk/utils.h>
@@ -13,7 +14,7 @@ void init_framebuffer(struct stivale2_struct* bootinfo){
     fb_info.height = fbtag->framebuffer_height;
     fb_info.width = fbtag->framebuffer_width;
     fb_info.bpp = fbtag->framebuffer_bpp;
-    dbgln("Framebuffer: address: 0x%xl\n\rFramebuffer: Height: %ui\n\rFramebuffer: Widht: %ui\n\rFramebuffer: BPP: %ui\n\r", 
+    dbgln("Framebuffer: address: 0x%xl\n\rFramebuffer: Height: %ui\n\rFramebuffer: Width: %ui\n\rFramebuffer: BPP: %ui\n\r", 
             fb_info.address, fb_info.height, fb_info.width, fb_info.bpp);
 }
 

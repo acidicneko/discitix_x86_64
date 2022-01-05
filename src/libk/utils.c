@@ -2,13 +2,12 @@
 #include <libk/utils.h>
 #include <libk/string.h>
 #include <drivers/serial.h>
-#include <mm/pmm.h>
 
 void sysfetch(){
     printf("\033[34m ____  \n");
     printf("\033[34m|  _ \\\t\033[1;37mKernel: \033[0mDiscitix\n");
     printf("\033[34m| | | |\t\033[1;37mBuild: \033[0m%s\n", __DATE__);
-    printf("\033[34m| |_| |\t\033[1;37mMemory: \033[0m%ulM\n", get_usable_memory()/1024/1024);
+    printf("\033[34m| |_| |\t\033[1;37mMemory: \033[0mNAN\n");
     printf("\033[34m|____/\n\033[0m\n");
 
     printf("\033[40m  \033[41m  \033[42m  \033[43m  \033[44m  \033[45m  \033[46m  \033[47m  \n");
