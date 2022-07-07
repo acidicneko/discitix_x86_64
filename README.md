@@ -10,8 +10,7 @@ Join Discitix's own [Discord Server](https://discord.gg/6a9C3r2fGU)
 
 ## Discitix in action
 
-![Settings Window](https://raw.githubusercontent.com/ayush7788/discitix_x86_64/main/images/prompt.png)
-![Settings Window](https://raw.githubusercontent.com/ayush7788/discitix_x86_64/main/images/serial.png)
+![Settings Window](https://raw.githubusercontent.com/acidicneko/discitix_x86_64/main/images/kernel.png)
 
 ## Building
 Please install libuuid, libfuse and pkgconfig for echFS utils.
