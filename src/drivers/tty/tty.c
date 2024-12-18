@@ -84,13 +84,14 @@ void tty_paint_cell(terminal_cell_t cell) {
 
 void tty_paint_cell_psf(terminal_cell_t cell) {
   if (g_font.header == 0) {
-    dbgln("[TTY] Invalid psf font detected! Falling back to bitmap font!\n");
+    dbgln("[TTY] Invalid psf font detected! Falling back to bitmap font!\n\r");
     tty_paint_cell(cell);
     return;
   }
 
   if (g_font.glyphBuffer == 0) {
-    dbgln("[TTY] Invalid font memory detected! Falling back to bitmap font!\n");
+    dbgln(
+        "[TTY] Invalid font memory detected! Falling back to bitmap font!\n\r");
     tty_paint_cell(cell);
     return;
   }
@@ -99,7 +100,7 @@ void tty_paint_cell_psf(terminal_cell_t cell) {
       g_font.glyphBuffer + (cell.printable_char * g_font.header->bytesperglyph);
 
   if (glyph == 0) {
-    dbgln("[TTY] Invalid symbol Falling back to bitmap font!\n");
+    dbgln("[TTY] Invalid symbol Falling back to bitmap font!\n\r");
     tty_paint_cell(cell);
     return;
   }
@@ -147,7 +148,7 @@ void tty_putchar_raw(char c) {
     x_cursor += 1;
     break;
   }
-  if (x_cursor >= current_fb->width / GLYPH_WIDTH) {
+  if (x_cursor >= current_fb->width / g_font.header->width) {
     x_cursor = 0;
     y_cursor++;
   }

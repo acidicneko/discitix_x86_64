@@ -38,6 +38,7 @@ SOFTWARE. */
 #include <mm/pmm.h>
 
 void init_kernel(struct stivale2_struct *bootinfo) {
+  initial_psf_setup();
   init_arg_parser(bootinfo);
   if (!arg_exist("noserial")) {
     serial_init(COM1_PORT);
