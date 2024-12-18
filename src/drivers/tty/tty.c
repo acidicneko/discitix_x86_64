@@ -173,3 +173,9 @@ void tty_paint_cursor(uint32_t x, uint32_t y) {
 void set_currentFg(uint32_t value) { currentFg = value; }
 
 void set_currentBg(uint32_t value) { currentBg = value; }
+
+void tty_clear() {
+  x_cursor = 0;
+  y_cursor = 0;
+  framebuffer_clear(currentBg);
+}

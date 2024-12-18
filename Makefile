@@ -68,7 +68,7 @@ clean:
 
 run:
 	@echo [RUN] $(IMAGE)
-	@qemu-system-x86_64 -hda $(IMAGE) -m 128M
+	@qemu-system-x86_64 -drive format=raw,file=$(IMAGE) -m 128M
 
 setup:
 	@echo Building and installing echFS utils

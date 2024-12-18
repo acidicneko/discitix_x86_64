@@ -29,4 +29,6 @@ void tty_paint_cursor(uint32_t x, uint32_t y);
 void set_currentFg(uint32_t value);
 void set_currentBg(uint32_t value);
 
+void tty_clear();
+
 #endif
