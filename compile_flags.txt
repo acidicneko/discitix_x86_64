@@ -1,0 +1,9 @@
+-Isrc/include
+-ffreestanding
+-mno-red-zone
+-fno-pic 
+-fpie
+-fno-stack-protector
+-mgeneral-regs-only
+-fno-exceptions
+

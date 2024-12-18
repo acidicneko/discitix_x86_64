@@ -1,8 +1,11 @@
 ENTRY(_start)
- 
+
+
 SECTIONS
 {
-    . = 0xffffffff80200000;
+    /*. = 0xffffffff80200000;*/
+    . = 1M;
+    
     .stivale2hdr : ALIGN(4K) {
         KEEP(*(.stivale2hdr))
     }
@@ -22,4 +25,5 @@ SECTIONS
         *(COMMON)
         *(.bss*)
     }
+    PROVIDE(_kernel_end = .);
 }

@@ -11,14 +11,16 @@ INTERNALCFLAGS  :=       \
 
 LDINTERNALFLAGS :=  \
 	-Tmisc/linker.ld \
+	-ffreestanding\
 	-nostdlib   \
+	-nodefaultlibs\
 	-shared     \
 	-pie -fno-pic -fpie \
 	-z max-page-size=0x1000
 
 CFILES = $(shell find src/ -type f -name '*.c')
 ASMFILES = $(shell find src/ -type f -name '*.asm')
-OFILES = $(CFILES:.c=.o) $(ASMFILES:.asm=.o)
+OFILES = $(CFILES:.c=.o) $(ASMFILES:.asm=.o) misc/default.o
 INITRD_FILES = misc/initrd/arru.txt arru.txt misc/initrd/hello.txt hello.txt misc/initrd/uname.txt uname.txt
 
 TARGET = build/kernel.elf
@@ -55,6 +57,10 @@ $(TARGET): $(OFILES)
 %.o: %.asm
 	@echo [ASM] $@
 	@nasm -felf64 -o $@ $<
+
+misc/default.o: misc/default.psf
+	@echo [OBJCOPY] default.psf
+	@objcopy -O elf64-x86-64 -B i386 -I binary $< $@ --add-section .note.GNU-stack=/dev/null --set-section-flags .note.GNU-stack=contents,alloc,load,readonly
 
 clean:
 	@echo [CLEAN] 

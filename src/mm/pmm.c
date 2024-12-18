@@ -1,8 +1,7 @@
-#include <mm/pmm.h>
-#include <stdint.h>
 #include <libk/string.h>
 #include <libk/utils.h>
-
+#include <mm/pmm.h>
+#include <stdint.h>
 
 #define ALIGN_UP(__number) (((__number) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1))
 #define ALIGN_DOWN(__number) ((__number) & ~(PAGE_SIZE - 1))
@@ -14,56 +13,52 @@
 static uint8_t *pmm_bitmap = 0;
 static uintptr_t highest_page = 0;
 
-void pmm_free_page(void *adr) {
-    BIT_CLEAR((size_t)adr / PAGE_SIZE);
-}
+void pmm_free_page(void *adr) { BIT_CLEAR((size_t)adr / PAGE_SIZE); }
 
-void pmm_alloc_page(void *adr) {
-    BIT_SET((size_t)adr / PAGE_SIZE);
-}
+void pmm_alloc_page(void *adr) { BIT_SET((size_t)adr / PAGE_SIZE); }
 
 void pmm_free_pages(void *adr, size_t page_count) {
-    for (size_t i = 0; i < page_count; i++)
-        pmm_free_page((void *)(adr + (i * PAGE_SIZE)));
+  for (size_t i = 0; i < page_count; i++)
+    pmm_free_page((void *)(adr + (i * PAGE_SIZE)));
 }
 
-
 void pmm_alloc_pages(void *adr, size_t page_count) {
-    for (size_t i = 0; i < page_count; i++)
-        pmm_alloc_page((void *)(adr + (i * PAGE_SIZE)));
+  for (size_t i = 0; i < page_count; i++)
+    pmm_alloc_page((void *)(adr + (i * PAGE_SIZE)));
 }
 
 void *pmalloc(size_t pages) {
-    for (size_t i = 0; i < highest_page / PAGE_SIZE; i++)
-        for (size_t j = 0; j < pages; j++) {
-        if (BIT_TEST(i))
-            break;
-        else if (j == pages - 1) {
-            pmm_alloc_pages((void *)(i * PAGE_SIZE), pages);
-            return (void *)(i * PAGE_SIZE);
-        }
+  for (size_t i = 0; i < highest_page / PAGE_SIZE; i++)
+    for (size_t j = 0; j < pages; j++) {
+      if (BIT_TEST(i))
+        break;
+      else if (j == pages - 1) {
+        pmm_alloc_pages((void *)(i * PAGE_SIZE), pages);
+        return (void *)(i * PAGE_SIZE);
+      }
     }
 
-    dbgln("PMM: Ran out of memory! Halting!\n\r");
-    while (1)
-        ;
-    return NULL;
+  dbgln("PMM: Ran out of memory! Halting!\n\r");
+  while (1)
+    ;
+  return NULL;
 }
 
 void *pcalloc(size_t pages) {
-    char *ret = (char *)pmalloc(pages);
+  char *ret = (char *)pmalloc(pages);
 
-    if (ret == NULL)
-        return NULL;
+  if (ret == NULL)
+    return NULL;
 
-    memset((void *)((uint64_t)ret + PHYS_MEM_OFFSET), 0, pages * PAGE_SIZE);
+  memset((void *)((uint64_t)ret /*+ PHYS_MEM_OFFSET*/), 0, pages * PAGE_SIZE);
 
-    return ret;
+  return ret;
 }
 
-int init_pmm(struct stivale2_struct* bootinfo) {
-    struct stivale2_struct_tag_memmap *memory_info = (struct stivale2_struct_tag_memmap*)
-                                                        stivale2_get_tag(bootinfo, STIVALE2_STRUCT_TAG_MEMMAP_ID);
+int init_pmm(struct stivale2_struct *bootinfo) {
+  struct stivale2_struct_tag_memmap *memory_info =
+      (struct stivale2_struct_tag_memmap *)stivale2_get_tag(
+          bootinfo, STIVALE2_STRUCT_TAG_MEMMAP_ID);
 
   uintptr_t top;
 
@@ -87,7 +82,7 @@ int init_pmm(struct stivale2_struct* bootinfo) {
     struct stivale2_mmap_entry *entry = &memory_info->memmap[i];
 
     if (entry->type == STIVALE2_MMAP_USABLE && entry->length >= bitmap_size) {
-      pmm_bitmap = (uint8_t *)(entry->base + PHYS_MEM_OFFSET);
+      pmm_bitmap = (uint8_t *)(entry->base /*+ PHYS_MEM_OFFSET*/);
       entry->base += bitmap_size;
       entry->length -= bitmap_size;
       break;
