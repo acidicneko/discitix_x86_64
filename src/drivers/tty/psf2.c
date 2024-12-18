@@ -1,10 +1,13 @@
 #include "libk/utils.h"
 #include <drivers/tty/psf2.h>
 #include <drivers/tty/tty.h>
+#include <libk/stdio.h>
 #include <mm/pmm.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 psf2_font_t g_font;
+static bool psf2_loaded = false;
 
 void initial_psf_setup() {
   g_font.header = 0;
@@ -36,4 +39,13 @@ void load_embedded_psf2() {
   // Store the glyph data globally if needed for rendering
   g_font.header = font_header;
   g_font.glyphBuffer = glyph_data;
+  psf2_loaded = true;
+}
+
+void print_font_details() {
+  if (!psf2_loaded)
+    return;
+  printf("Header size: %ui\n", g_font.header->headersize);
+  printf("Number of glyphs: %ul\n", g_font.header->length);
+  printf("Dimension: %ulx%ul\n", g_font.header->width, g_font.header->height);
 }

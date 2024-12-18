@@ -66,6 +66,7 @@ void init_kernel(struct stivale2_struct *bootinfo) {
          bootinfo->bootloader_brand, bootinfo->bootloader_version);
   init_initrd(bootinfo);
   dbgln("Kernel initialised successfully!\n\r");
+  print_font_details();
 }
 
 void kmain(struct stivale2_struct *bootinfo) {

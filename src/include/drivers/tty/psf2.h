@@ -41,5 +41,6 @@ extern psf2_font_t g_font;
 
 void initial_psf_setup();
 void load_embedded_psf2();
+void print_font_details();
 
 #endif // !PSF2_FONT
