@@ -9,4 +9,7 @@ pkgs.mkShellNoCC {
     nasm
     qemu
   ];
+  shellHook = ''
+    unset SOURCE_DATE_EPOCH
+  '';
 }
