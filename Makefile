@@ -21,7 +21,9 @@ LDINTERNALFLAGS :=  \
 CFILES = $(shell find src/ -type f -name '*.c')
 ASMFILES = $(shell find src/ -type f -name '*.asm')
 OFILES = $(CFILES:.c=.o) $(ASMFILES:.asm=.o) misc/default.o
-INITRD_FILES = misc/initrd/arru.txt arru.txt misc/initrd/hello.txt hello.txt misc/initrd/uname.txt uname.txt
+#INITRD_FILES = misc/initrd/arru.txt arru.txt misc/initrd/hello.txt hello.txt misc/initrd/uname.txt uname.txt
+#INITRD_FILES = misc/initrd/arru.txt misc/initrd/hello.txt misc/initrd/uname.txt
+INITRD_FILES = shell.nix .gitmodules compile_flags.txt
 
 TARGET = build/kernel.elf
 IMAGE = build/image.hdd
@@ -37,8 +39,8 @@ $(IMAGE): $(TARGET)
 	@echfs-utils -g -p0 $(IMAGE) quick-format 512
 	@echfs-utils -g -p0 $(IMAGE) import misc/limine.cfg limine.cfg
 	@echfs-utils -g -p0 $(IMAGE) import $(TARGET) kernel.elf
-	@echo [ARRUFS]
-	@./misc/initrd/arru-util misc/initrd/initrd.img write $(INITRD_FILES)
+	@echo [STRIPFS]
+	@./misc/initrd/stripctl misc/initrd/initrd.img $(INITRD_FILES)
 	@echfs-utils -g -p0 $(IMAGE) import misc/initrd/initrd.img initrd.img
 	@echo [LIMINE] $(IMAGE)
 	@./limine/limine-install $(IMAGE)

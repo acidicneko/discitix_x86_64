@@ -30,6 +30,7 @@ SOFTWARE. */
 #include <drivers/tty/psf2.h>
 #include <drivers/tty/tty.h>
 #include <fs/initrd.h>
+#include <fs/stripFS.h>
 #include <init/stivale2.h>
 #include <libk/shell.h>
 #include <libk/stdio.h>
@@ -64,7 +65,8 @@ void init_kernel(struct stivale2_struct *bootinfo) {
   }
   printf("\nBootloader: %s\nBootloader Version: %s\n",
          bootinfo->bootloader_brand, bootinfo->bootloader_version);
-  init_initrd(bootinfo);
+  // init_initrd(bootinfo);
+  init_initrd_stripFS(bootinfo);
   dbgln("Kernel initialised successfully!\n\r");
   print_font_details();
 }

@@ -1,1 +1,1 @@
-This is the first release of ArruFS. UwU
+This is the first release of stripFS.

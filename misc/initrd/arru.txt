@@ -1,2 +1,2 @@
-ArruFS v1
-By Clawbhaiya (https://github.com/clawbhaiya)
+stripFS v1
+by acidicneko (https://github.com/acidicneko)

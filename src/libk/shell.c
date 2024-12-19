@@ -1,5 +1,5 @@
-#include "drivers/tty/tty.h"
-#include <fs/initrd.h>
+#include <drivers/tty/tty.h>
+#include <fs/stripFS.h>
 #include <libk/shell.h>
 #include <libk/stdio.h>
 #include <libk/string.h>
@@ -18,7 +18,7 @@ void execute(char **argv, int argc) {
     }
     dbgln("\n\r");
   } else if (!strcmp(argv[0], "read")) {
-    read_initrd();
+    read_initrd_stripFS();
   } else if (!strcmp(argv[0], "echo")) {
     for (uint8_t i = 1; i < argc; i++) {
       printf("%s ", argv[i]);
