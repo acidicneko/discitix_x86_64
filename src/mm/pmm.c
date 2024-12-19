@@ -12,19 +12,25 @@
 
 static uint8_t *pmm_bitmap = 0;
 static uintptr_t highest_page = 0;
+static uint32_t total_mem = 0;
+static uint32_t free_mem = 0;
 
 void pmm_free_page(void *adr) { BIT_CLEAR((size_t)adr / PAGE_SIZE); }
 
 void pmm_alloc_page(void *adr) { BIT_SET((size_t)adr / PAGE_SIZE); }
 
 void pmm_free_pages(void *adr, size_t page_count) {
-  for (size_t i = 0; i < page_count; i++)
+  for (size_t i = 0; i < page_count; i++) {
     pmm_free_page((void *)(adr + (i * PAGE_SIZE)));
+    free_mem += page_count * PAGE_SIZE;
+  }
 }
 
 void pmm_alloc_pages(void *adr, size_t page_count) {
-  for (size_t i = 0; i < page_count; i++)
+  for (size_t i = 0; i < page_count; i++) {
     pmm_alloc_page((void *)(adr + (i * PAGE_SIZE)));
+    free_mem -= page_count * PAGE_SIZE;
+  }
 }
 
 void *pmalloc(size_t pages) {
@@ -91,10 +97,16 @@ int init_pmm(struct stivale2_struct *bootinfo) {
 
   memset(pmm_bitmap, 0xff, bitmap_size);
 
-  for (size_t i = 0; i < memory_info->entries; i++)
-    if (memory_info->memmap[i].type == STIVALE2_MMAP_USABLE)
+  for (size_t i = 0; i < memory_info->entries; i++) {
+    if (memory_info->memmap[i].type == STIVALE2_MMAP_USABLE) {
       pmm_free_pages((void *)memory_info->memmap[i].base,
                      memory_info->memmap[i].length / PAGE_SIZE);
-
+      total_mem += memory_info->memmap[i].length;
+    }
+  }
+  free_mem = total_mem;
   return 0;
 }
+
+uint32_t get_total_physical_memory() { return total_mem; }
+uint32_t get_free_physical_memory() { return free_mem; }
