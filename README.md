@@ -23,7 +23,7 @@ Install these too:
 
 After installing all prerequsites, clone this repo with -
 ```
-git clone --recurse-submodules https://github.com/ayush7788/discitix_x86_64.git
+git clone --recurse-submodules https://github.com/acidicneko/discitix_x86_64.git
 ```
 If you are building for first time, run `make setup` as root.
 
@@ -34,6 +34,8 @@ After building the kernel, run it with, `make run`
 ### Features
 - [x] Port to x86_64
 - [x] High resolution framebuffer driver
+- [x] ANSI Escape sequence handling
+- [x] High resolution PSF2 Fonts
 - [x] Physical Memory Manager
 - [x] Interrupts implemented
 - [ ] Virtual Memory Manager
