@@ -4,6 +4,7 @@
 #include <libk/stdio.h>
 #include <libk/string.h>
 #include <libk/utils.h>
+#include <mm/pmm.h>
 
 void execute(char **argv, int argc) {
   if (!strcmp(argv[0], "uname")) {
@@ -26,6 +27,12 @@ void execute(char **argv, int argc) {
     printf("\n");
   } else if (!strcmp(argv[0], "clear")) {
     tty_clear();
+  } else if (!strcmp(argv[0], "free")) {
+    printf("\t\ttotal\t\tused\t\tfree\n");
+    printf("Mem:\t\t%ul\t\t%ul\t\t%ul\n", get_total_physical_memory() / 1024,
+           (get_total_physical_memory() - get_free_physical_memory()) / 1024,
+           get_free_physical_memory() / 1024);
+
   } else {
     printf("ayu.sh: %s: unknown command\n\n", argv[0]);
   }
