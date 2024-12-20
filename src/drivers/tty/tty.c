@@ -153,9 +153,7 @@ void tty_putchar_raw(char c) {
     y_cursor++;
   }
   if (y_cursor >= current_fb->height / g_font.header->height) {
-    for (uint8_t i = 0; i < g_font.header->height; i++) {
-      scroll_framebuffer(currentBg);
-    }
+    scroll_framebuffer(currentBg, g_font.header->height);
     x_cursor = 0;
     y_cursor--;
   }

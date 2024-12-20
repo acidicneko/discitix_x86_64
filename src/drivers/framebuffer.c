@@ -32,20 +32,22 @@ void framebuffer_clear(uint32_t color) {
 
 fb_info_t *get_fb_info() { return &fb_info; }
 
-void scroll_framebuffer(uint32_t color) {
+void scroll_framebuffer(uint32_t color, uint8_t pixel_count) {
   int pixels_per_row = fb_info.width;
   int row_count = fb_info.height;
 
-  for (int y = 0; y < row_count - 1; y++) {
+  for (int y = 0; y < row_count - pixel_count; y++) {
     for (int x = 0; x < pixels_per_row; x++) {
       fb_info.address[y * pixels_per_row + x] =
-          fb_info.address[(y + 1) * pixels_per_row + x];
+          fb_info.address[(y + pixel_count) * pixels_per_row + x];
     }
   }
 
   int last_row = row_count - 1;
 
-  for (int x = 0; x < pixels_per_row; x++) {
-    fb_info.address[last_row * pixels_per_row + x] = color;
+  for (int y = row_count - pixel_count; y < row_count; y++) {
+    for (int x = 0; x < pixels_per_row; x++) {
+      fb_info.address[y * pixels_per_row + x] = color;
+    }
   }
 }
