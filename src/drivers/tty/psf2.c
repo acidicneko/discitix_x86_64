@@ -45,8 +45,7 @@ void load_embedded_psf2() {
   }
 
   // Calculate glyph data pointer
-  void *glyph_data =
-      (void *)&_binary_misc_default_psf_start + font_header->headersize;
+  void *glyph_data = (void *)font_buffer + font_header->headersize;
   // Store the glyph data globally if needed for rendering
   g_font.header = font_header;
   g_font.glyphBuffer = glyph_data;
