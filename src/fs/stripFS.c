@@ -50,3 +50,48 @@ int read_initrd_stripFS() {
   }
   return 0;
 }
+
+int stat_file_stripFS(const char *filename, strip_fs_file_t *fp) {
+  uint8_t *ptr = (uint8_t *)(initrd_location_strip + sizeof(strip_fs_header_t));
+
+  for (int i = 0; i < header_strip->num_files; i++) {
+
+    strip_fs_file_t *file = (strip_fs_file_t *)pmalloc(1);
+    memcpy((uint8_t *)file, ptr, sizeof(strip_fs_file_t));
+
+    if (!strcmp(filename, file->filename)) {
+      strcpy(fp->filename, file->filename);
+      fp->length = file->length;
+      fp->offset = file->offset;
+      return 0;
+    }
+
+    memset(file, 0, sizeof(strip_fs_file_t));
+    pmm_free_pages(file, 1);
+
+    ptr += sizeof(strip_fs_file_t);
+  }
+  return -1;
+}
+
+int read_file_stripFS(const char *filename, uint8_t *buffer) {
+  uint8_t *ptr = (uint8_t *)(initrd_location_strip + sizeof(strip_fs_header_t));
+
+  for (int i = 0; i < header_strip->num_files; i++) {
+
+    strip_fs_file_t *file = (strip_fs_file_t *)pmalloc(1);
+    memcpy((uint8_t *)file, ptr, sizeof(strip_fs_file_t));
+
+    if (!strcmp(filename, file->filename)) {
+      uint8_t *contents = (uint8_t *)(initrd_location_strip + file->offset);
+      memcpy((uint8_t *)buffer, contents, file->length);
+      return 0;
+    }
+
+    memset(file, 0, sizeof(strip_fs_file_t));
+    pmm_free_pages(file, 1);
+
+    ptr += sizeof(strip_fs_file_t);
+  }
+  return -1;
+}
