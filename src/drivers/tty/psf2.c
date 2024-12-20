@@ -40,7 +40,7 @@ void load_embedded_psf2() {
     dbgln("Provided font is PSF1!\n\r");
     return;
   } else {
-    dbgln("Invalid font type provided!\n\r");
+    dbgln("Invalid font type provided!\n\rKernel wouldn't be able to boot!");
     return;
   }
 
