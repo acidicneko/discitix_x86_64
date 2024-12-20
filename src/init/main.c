@@ -52,8 +52,10 @@ void init_kernel(struct stivale2_struct *bootinfo) {
   keyboard_install();
   pit_install(100);
   IRQ_START;
-  init_tty(bootinfo);
   init_pmm(bootinfo);
+  init_initrd_stripFS(bootinfo);
+
+  init_tty(bootinfo);
   if (arg_exist("gruvbox")) {
     init_colors(0x282828, 0xcc241d, 0x98971a, 0xd79921, 0x458588, 0xb16286,
                 0x689d6a, 0xa89984, 0x928374, 0xfb4934, 0xb8bb26, 0xfabd2f,
@@ -65,8 +67,6 @@ void init_kernel(struct stivale2_struct *bootinfo) {
   }
   printf("\nBootloader: %s\nBootloader Version: %s\n",
          bootinfo->bootloader_brand, bootinfo->bootloader_version);
-  // init_initrd(bootinfo);
-  init_initrd_stripFS(bootinfo);
   dbgln("Kernel initialised successfully!\n\r");
   print_font_details();
 }
