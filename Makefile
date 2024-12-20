@@ -20,7 +20,7 @@ LDINTERNALFLAGS :=  \
 
 CFILES = $(shell find src/ -type f -name '*.c')
 ASMFILES = $(shell find src/ -type f -name '*.asm')
-OFILES = $(CFILES:.c=.o) $(ASMFILES:.asm=.o) misc/default.o
+OFILES = $(CFILES:.c=.o) $(ASMFILES:.asm=.o)
 INITRD_FILES = shell.nix shell.nix .gitmodules .gitmodules compile_flags.txt compile_flags.txt misc/default.psf font.psf
 
 TARGET = build/kernel.elf
@@ -57,10 +57,6 @@ $(TARGET): $(OFILES)
 %.o: %.asm
 	@echo [ASM] $@
 	@nasm -felf64 -o $@ $<
-
-misc/default.o: misc/default.psf
-	@echo [OBJCOPY] default.psf
-	@objcopy -O elf64-x86-64 -B i386 -I binary $< $@ --add-section .note.GNU-stack=/dev/null --set-section-flags .note.GNU-stack=contents,alloc,load,readonly
 
 clean:
 	@echo [CLEAN] 
