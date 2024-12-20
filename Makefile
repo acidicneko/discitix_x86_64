@@ -21,9 +21,7 @@ LDINTERNALFLAGS :=  \
 CFILES = $(shell find src/ -type f -name '*.c')
 ASMFILES = $(shell find src/ -type f -name '*.asm')
 OFILES = $(CFILES:.c=.o) $(ASMFILES:.asm=.o) misc/default.o
-#INITRD_FILES = misc/initrd/arru.txt arru.txt misc/initrd/hello.txt hello.txt misc/initrd/uname.txt uname.txt
-#INITRD_FILES = misc/initrd/arru.txt misc/initrd/hello.txt misc/initrd/uname.txt
-INITRD_FILES = shell.nix .gitmodules compile_flags.txt
+INITRD_FILES = shell.nix shell.nix .gitmodules .gitmodules compile_flags.txt compile_flags.txt misc/default.psf font.psf
 
 TARGET = build/kernel.elf
 IMAGE = build/image.hdd
@@ -40,7 +38,7 @@ $(IMAGE): $(TARGET)
 	@echfs-utils -g -p0 $(IMAGE) import misc/limine.cfg limine.cfg
 	@echfs-utils -g -p0 $(IMAGE) import $(TARGET) kernel.elf
 	@echo [STRIPFS]
-	@./misc/initrd/stripctl misc/initrd/initrd.img $(INITRD_FILES)
+	@./stripFS/build/stripctl misc/initrd/initrd.img $(INITRD_FILES)
 	@echfs-utils -g -p0 $(IMAGE) import misc/initrd/initrd.img initrd.img
 	@echo [LIMINE] $(IMAGE)
 	@./limine/limine-install $(IMAGE)
@@ -78,5 +76,7 @@ setup:
 	@make install -C echfs
 	@echo Building Limine
 	@make -C limine
+	@Building stripctl
+	@make -C stripFS
 
 all: clean $(IMAGE) run

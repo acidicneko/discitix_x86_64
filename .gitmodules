@@ -4,3 +4,6 @@
 [submodule "echfs"]
 	path = echfs
 	url = https://github.com/echfs/echfs
+[submodule "stripFS"]
+	path = stripFS
+	url = https://github.com/acidicneko/stripFS.git

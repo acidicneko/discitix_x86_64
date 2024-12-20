@@ -1,1 +1,0 @@
-Discitix kernel 64-bit x86_64

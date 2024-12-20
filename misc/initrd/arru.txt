@@ -1,2 +1,0 @@
-stripFS v1
-by acidicneko (https://github.com/acidicneko)

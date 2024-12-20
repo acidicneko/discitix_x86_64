@@ -1,6 +1,7 @@
 #include "libk/utils.h"
 #include <drivers/tty/psf2.h>
 #include <drivers/tty/tty.h>
+#include <fs/stripFS.h>
 #include <libk/stdio.h>
 #include <mm/pmm.h>
 #include <stdbool.h>
@@ -15,8 +16,18 @@ void initial_psf_setup() {
 }
 
 void load_embedded_psf2() {
-  psf2_header_t *font_header =
-      (psf2_header_t *)(void *)&_binary_misc_default_psf_start;
+  strip_fs_file_t fp;
+  dbgln("trying to find the font file...\n\r");
+  stat_file_stripFS("font.psf", &fp);
+  dbgln("filename: %s\n\rfile size:%d\n\r", fp.filename, fp.length);
+  uint8_t *font_buffer = pmalloc((fp.length + PAGE_SIZE - 1) / PAGE_SIZE);
+
+  read_file_stripFS("font.psf", font_buffer);
+
+  // psf2_header_t *font_header =
+  //     (psf2_header_t *)(void *)&_binary_misc_default_psf_start;
+
+  psf2_header_t *font_header = (psf2_header_t *)(void *)font_buffer;
 
   // Validate magic number
   if (font_header->magic[0] == PSF2_MAGIC0 &&
