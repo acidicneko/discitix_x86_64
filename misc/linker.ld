@@ -3,7 +3,7 @@ ENTRY(_start)
 
 SECTIONS
 {
-    /*. = 0xffffffff80200000;*/
+    /*. = 0xffffffff80000000;*/
     . = 1M;
     
     .stivale2hdr : ALIGN(4K) {
