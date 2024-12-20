@@ -43,8 +43,6 @@ void scroll_framebuffer(uint32_t color, uint8_t pixel_count) {
     }
   }
 
-  int last_row = row_count - 1;
-
   for (int y = row_count - pixel_count; y < row_count; y++) {
     for (int x = 0; x < pixels_per_row; x++) {
       fb_info.address[y * pixels_per_row + x] = color;
