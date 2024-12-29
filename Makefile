@@ -1,22 +1,24 @@
 CC = gcc
-CFLAGS = -Wextra -Wall -O2 -pipe
+CFLAGS = -Wextra -Wall -O2 -pipe -g
 INTERNALCFLAGS  :=       \
 	-I src/include/      \
 	-ffreestanding       \
 	-mno-red-zone	 	\
-	-fno-pic -fpie		\
+	-fno-pic -fno-pie \
 	-fno-stack-protector \
 	-mgeneral-regs-only	\
-	-fno-exceptions
+	-fno-exceptions \
+	-mcmodel=kernel
 
 LDINTERNALFLAGS :=  \
 	-Tmisc/linker.ld \
 	-ffreestanding\
 	-nostdlib   \
 	-nodefaultlibs\
-	-shared     \
-	-pie -fno-pic -fpie \
-	-z max-page-size=0x1000
+	-z max-page-size=0x1000 \
+	-z noexecstack \
+	-Wl,--build-id=none \
+	-no-pie
 
 CFILES = $(shell find src/ -type f -name '*.c')
 ASMFILES = $(shell find src/ -type f -name '*.asm')
@@ -64,7 +66,7 @@ clean:
 
 run:
 	@echo [RUN] $(IMAGE)
-	@qemu-system-x86_64 -drive format=raw,file=$(IMAGE) -m 128M
+	@qemu-system-x86_64 -drive format=raw,file=$(IMAGE) -m 128M -serial stdio
 
 setup:
 	@echo Building and installing echFS utils

@@ -1,16 +1,18 @@
 section .stivale2hdr write
+align 4096
 stivale2_header:
-    .entry_point: dq 0
+    .entry_point: dq _start
     .stack: dq stack.top
     .flags: dq 0
     .tags: dq fb_tag
 
-section .bss
+section .bss nobits align=16
 stack:
     resb 4096
 .top:
 
 section .data
+align 16
 fb_tag:
     .id: dq 0x3ecc1bc43d0f7971
     .next: dq fb_mtrr ;define it later
@@ -27,6 +29,7 @@ global _start
 extern kmain
 _start:
     cli
+    mov rsp, stack.top + 0xFFFF800000000000
     call kmain
     hlt
     jmp loop
