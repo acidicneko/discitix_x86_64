@@ -74,7 +74,7 @@ setup:
 	@make install -C echfs
 	@echo Building Limine
 	@make -C limine
-	@Building stripctl
+	@echo Building stripctl
 	@make -C stripFS
 
 all: clean $(IMAGE) run
