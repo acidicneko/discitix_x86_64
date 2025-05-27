@@ -18,8 +18,8 @@ uint32_t y_cursor;
 
 fb_info_t *current_fb = NULL;
 
-void init_tty(struct stivale2_struct *bootinfo) {
-  init_framebuffer(bootinfo);
+void init_tty() {
+  init_framebuffer();
   x_cursor = 0;
   y_cursor = 0;
   current_fb = get_fb_info();

@@ -1,3 +1,5 @@
+#include <init/limine.h>
+#include <init/limine_req.h>
 #include <libk/string.h>
 #include <libk/utils.h>
 #include <mm/pmm.h>
@@ -15,7 +17,23 @@ static uintptr_t highest_page = 0;
 static uint32_t total_mem = 0;
 static uint32_t free_mem = 0;
 
-void pmm_free_page(void *adr) { BIT_CLEAR((size_t)adr / PAGE_SIZE); }
+void *get_physical_address(void *adr) {
+  if ((uintptr_t)adr < PHYS_MEM_OFFSET)
+    return adr;
+
+  return (void *)((uintptr_t)adr - PHYS_MEM_OFFSET);
+}
+
+void *get_virtual_address(void *adr) {
+  if ((uintptr_t)adr >= PHYS_MEM_OFFSET)
+    return adr;
+
+  return (void *)((uintptr_t)adr + PHYS_MEM_OFFSET);
+}
+
+void pmm_free_page(void *adr) {
+  BIT_CLEAR((size_t)get_physical_address(adr) / PAGE_SIZE);
+}
 
 void pmm_alloc_page(void *adr) { BIT_SET((size_t)adr / PAGE_SIZE); }
 
@@ -40,7 +58,8 @@ void *pmalloc(size_t pages) {
         break;
       else if (j == pages - 1) {
         pmm_alloc_pages((void *)(i * PAGE_SIZE), pages);
-        return (void *)(i * PAGE_SIZE);
+        // return (void *)(i * PAGE_SIZE) + PHYS_MEM_OFFSET;
+        return get_virtual_address((void *)(i * PAGE_SIZE));
       }
     }
 
@@ -61,19 +80,17 @@ void *pcalloc(size_t pages) {
   return ret;
 }
 
-int init_pmm(struct stivale2_struct *bootinfo) {
-  struct stivale2_struct_tag_memmap *memory_info =
-      (struct stivale2_struct_tag_memmap *)stivale2_get_tag(
-          bootinfo, STIVALE2_STRUCT_TAG_MEMMAP_ID);
+int init_pmm() {
+  struct limine_memmap_response *memory_info = memmap_request.response;
 
   uintptr_t top;
 
-  for (size_t i = 0; i < memory_info->entries; i++) {
-    struct stivale2_mmap_entry *entry = &memory_info->memmap[i];
+  for (uint64_t i = 0; i < memory_info->entry_count; i++) {
+    struct limine_memmap_entry *entry = memory_info->entries[i];
 
-    if (entry->type != STIVALE2_MMAP_USABLE &&
-        entry->type != STIVALE2_MMAP_BOOTLOADER_RECLAIMABLE &&
-        entry->type != STIVALE2_MMAP_KERNEL_AND_MODULES)
+    if (entry->type != LIMINE_MEMMAP_USABLE &&
+        entry->type != LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE &&
+        entry->type != LIMINE_MEMMAP_KERNEL_AND_MODULES)
       continue;
 
     top = entry->base + entry->length;
@@ -84,24 +101,25 @@ int init_pmm(struct stivale2_struct *bootinfo) {
 
   size_t bitmap_size = ALIGN_UP(ALIGN_DOWN(highest_page) / PAGE_SIZE / 8);
 
-  for (size_t i = 0; i < memory_info->entries; i++) {
-    struct stivale2_mmap_entry *entry = &memory_info->memmap[i];
+  for (uint64_t i = 0; i < memory_info->entry_count; i++) {
+    struct limine_memmap_entry *entry = memory_info->entries[i];
 
-    if (entry->type == STIVALE2_MMAP_USABLE && entry->length >= bitmap_size) {
-      pmm_bitmap = (uint8_t *)(entry->base /*+ PHYS_MEM_OFFSET*/);
+    if (entry->type == LIMINE_MEMMAP_USABLE && entry->length >= bitmap_size) {
+      // TODO: Check if i need to add PHYS_MEM_OFFSET here
+      pmm_bitmap = (uint8_t *)(entry->base + PHYS_MEM_OFFSET);
       entry->base += bitmap_size;
       entry->length -= bitmap_size;
       break;
     }
   }
-
+  dbgln("Allocated bitmap at: 0x%xh\n\r", pmm_bitmap);
   memset(pmm_bitmap, 0xff, bitmap_size);
 
-  for (size_t i = 0; i < memory_info->entries; i++) {
-    if (memory_info->memmap[i].type == STIVALE2_MMAP_USABLE) {
-      pmm_free_pages((void *)memory_info->memmap[i].base,
-                     memory_info->memmap[i].length / PAGE_SIZE);
-      total_mem += memory_info->memmap[i].length;
+  for (uint64_t i = 0; i < memory_info->entry_count; i++) {
+    if (memory_info->entries[i]->type == LIMINE_MEMMAP_USABLE) {
+      pmm_free_pages((void *)memory_info->entries[i]->base,
+                     memory_info->entries[i]->length / PAGE_SIZE);
+      total_mem += memory_info->entries[i]->length;
     }
   }
   free_mem = total_mem;

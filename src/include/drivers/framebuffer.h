@@ -11,7 +11,7 @@ typedef struct {
   uint32_t bpp;
 } fb_info_t;
 
-void init_framebuffer(struct stivale2_struct *bootinfo);
+void init_framebuffer();
 void framebuffer_put_pixel(int x_pos, uint32_t y_pos, uint32_t color);
 void framebuffer_clear(uint32_t color);
 fb_info_t *get_fb_info();

@@ -17,16 +17,14 @@ void initial_psf_setup() {
 
 void load_embedded_psf2() {
   strip_fs_file_t fp;
-  dbgln("trying to find the font file...\n\r");
   stat_file_stripFS("font.psf", &fp);
-  dbgln("filename: %s\n\rfile size:%d\n\r", fp.filename, fp.length);
+  dbgln("Filename: %s\n\rFile size:%d\n\r", fp.filename, fp.length);
   uint8_t *font_buffer = pmalloc((fp.length + PAGE_SIZE - 1) / PAGE_SIZE);
 
-  read_file_stripFS("font.psf", font_buffer);
+  read_file_stripFS(&fp, font_buffer);
 
   // psf2_header_t *font_header =
   //     (psf2_header_t *)(void *)&_binary_misc_default_psf_start;
-
   psf2_header_t *font_header = (psf2_header_t *)(void *)font_buffer;
 
   // Validate magic number
@@ -40,7 +38,8 @@ void load_embedded_psf2() {
     dbgln("Provided font is PSF1!\n\r");
     return;
   } else {
-    dbgln("Invalid font type provided!\n\rKernel wouldn't be able to boot!");
+    dbgln(
+        "Invalid font type provided!\n\rKernel wouldn't be able to boot!\n\r");
     return;
   }
 

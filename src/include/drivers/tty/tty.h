@@ -12,7 +12,7 @@ typedef struct {
 
 extern uint32_t colors[];
 
-void init_tty(struct stivale2_struct *bootinfo);
+void init_tty();
 void init_colors(uint32_t black, uint32_t red, uint32_t green, uint32_t yellow,
                  uint32_t blue, uint32_t purple, uint32_t cyan, uint32_t white,
                  uint32_t blackBright, uint32_t redBright, uint32_t greenBright,

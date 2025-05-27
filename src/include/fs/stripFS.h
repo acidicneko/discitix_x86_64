@@ -18,9 +18,9 @@ typedef struct {
   int offset;
 } strip_fs_file_t;
 
-void init_initrd_stripFS(struct stivale2_struct *bootinfo);
+void init_initrd_stripFS();
 int read_initrd_stripFS();
 int stat_file_stripFS(const char *filename, strip_fs_file_t *fp);
-int read_file_stripFS(const char *filename, uint8_t *buffer);
+int read_file_stripFS(strip_fs_file_t *fp, uint8_t *buffer);
 
 #endif // !__STRIP_FS__

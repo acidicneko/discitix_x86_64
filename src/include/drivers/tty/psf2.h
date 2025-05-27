@@ -33,10 +33,6 @@ typedef struct {
   uint8_t *glyphBuffer;
 } psf2_font_t;
 
-extern char _binary_misc_default_psf_size;
-extern char _binary_misc_default_psf_start[];
-extern char _binary_misc_default_psf_end;
-
 extern psf2_font_t g_font;
 
 void initial_psf_setup();

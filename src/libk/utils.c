@@ -1,4 +1,5 @@
 #include <drivers/serial.h>
+#include <init/limine_req.h>
 #include <libk/stdio.h>
 #include <libk/string.h>
 #include <libk/utils.h>
@@ -42,15 +43,25 @@ void dbgln(char *fmt, ...) {
 char *kernel_argv[128];
 int kernel_argc = 0;
 
-void init_arg_parser(struct stivale2_struct *bootinfo) {
-  struct stivale2_struct_tag_cmdline *cmdline =
-      (struct stivale2_struct_tag_cmdline *)stivale2_get_tag(
-          bootinfo, STIVALE2_STRUCT_TAG_CMDLINE_ID);
-  char *cmdline_str = (char *)cmdline->cmdline;
-  kernel_argv[kernel_argc] = strtok(cmdline_str, " ");
-  while (kernel_argv[kernel_argc]) {
-    kernel_argc++;
-    kernel_argv[kernel_argc] = strtok(0, " ");
+void init_arg_parser() {
+  // struct stivale2_struct_tag_cmdline *cmdline =
+  //     (struct stivale2_struct_tag_cmdline *)stivale2_get_tag(
+  //         bootinfo, STIVALE2_STRUCT_TAG_CMDLINE_ID);
+  // char *cmdline_str = (char *)cmdline->cmdline;
+  // kernel_argv[kernel_argc] = strtok(cmdline_str, " ");
+  // while (kernel_argv[kernel_argc]) {
+  //   kernel_argc++;
+  //   kernel_argv[kernel_argc] = strtok(0, " ");
+  // }
+  char *cmdline = (char *)kernel_file_request.response->kernel_file->cmdline;
+  if (cmdline != NULL) {
+    kernel_argv[kernel_argc] = strtok(cmdline, " ");
+    while (kernel_argv[kernel_argc]) {
+      kernel_argc++;
+      kernel_argv[kernel_argc] = strtok(0, " ");
+    }
+  } else {
+    kernel_argv[kernel_argc] = NULL;
   }
 }
 

@@ -1,31 +1,46 @@
+SHELL = /bin/sh
+
 CC = cc
-OBJCOPY = objcopy
+CFLAGS = -g -O2 -pipe
+CPPFLAGS =
+LDFLAGS =
+LIBS =
+
+WERROR_FLAG =
+
+STRIP = strip
+INSTALL = ./install-sh
 
 PREFIX = /usr/local
-DESTDIR =
 
-LIMINE_HDD_BIN = limine-hdd.bin
-BUILD_DIR = $(shell realpath .)
+.PHONY: all
+all: limine
 
-CFLAGS = -O2 -pipe -Wall -Wextra
-
-.PHONY: all clean
-
-all: limine-install
-
+.PHONY: install
 install: all
-	install -d "$(DESTDIR)$(PREFIX)/bin"
-	install -s limine-install "$(DESTDIR)$(PREFIX)/bin/"
-	install -d "$(DESTDIR)$(PREFIX)/share"
-	install -d "$(DESTDIR)$(PREFIX)/share/limine"
-	install -m 644 limine.sys "$(DESTDIR)$(PREFIX)/share/limine/"
-	install -m 644 limine-cd.bin "$(DESTDIR)$(PREFIX)/share/limine/"
-	install -m 644 limine-eltorito-efi.bin "$(DESTDIR)$(PREFIX)/share/limine/"
-	install -m 644 limine-pxe.bin "$(DESTDIR)$(PREFIX)/share/limine/"
-	install -m 644 BOOTX64.EFI "$(DESTDIR)$(PREFIX)/share/limine/"
+	$(INSTALL) -d '$(DESTDIR)$(PREFIX)/share'
+	$(INSTALL) -d '$(DESTDIR)$(PREFIX)/share/limine'
+	$(INSTALL) -m 644 limine-bios.sys '$(DESTDIR)$(PREFIX)/share/limine/'
+	$(INSTALL) -m 644 limine-bios-cd.bin '$(DESTDIR)$(PREFIX)/share/limine/'
+	$(INSTALL) -m 644 limine-uefi-cd.bin '$(DESTDIR)$(PREFIX)/share/limine/'
+	$(INSTALL) -m 644 limine-bios-pxe.bin '$(DESTDIR)$(PREFIX)/share/limine/'
+	$(INSTALL) -m 644 BOOTX64.EFI '$(DESTDIR)$(PREFIX)/share/limine/'
+	$(INSTALL) -m 644 BOOTIA32.EFI '$(DESTDIR)$(PREFIX)/share/limine/'
+	$(INSTALL) -m 644 BOOTAA64.EFI '$(DESTDIR)$(PREFIX)/share/limine/'
+	$(INSTALL) -m 644 BOOTRISCV64.EFI '$(DESTDIR)$(PREFIX)/share/limine/'
+	$(INSTALL) -m 644 BOOTLOONGARCH64.EFI '$(DESTDIR)$(PREFIX)/share/limine/'
+	$(INSTALL) -d '$(DESTDIR)$(PREFIX)/include'
+	$(INSTALL) -m 644 limine.h '$(DESTDIR)$(PREFIX)/include/'
+	$(INSTALL) -d '$(DESTDIR)$(PREFIX)/bin'
+	$(INSTALL) limine '$(DESTDIR)$(PREFIX)/bin/'
 
+.PHONY: install-strip
+install-strip: install
+	$(STRIP) '$(DESTDIR)$(PREFIX)/bin/limine'
+
+.PHONY: clean
 clean:
-	rm -f limine-install limine-install.exe
+	rm -f limine limine.exe
 
-limine-install: limine-install.c inc.S $(LIMINE_HDD_BIN)
-	$(CC) $(CFLAGS) -std=c11 -DLIMINE_HDD_BIN='"$(LIMINE_HDD_BIN)"' limine-install.c inc.S -o $@
+limine: limine.c
+	$(CC) $(CFLAGS) -Wall -Wextra $(WERROR_FLAG) $(CPPFLAGS) $(LDFLAGS) -std=c99 limine.c $(LIBS) -o $@

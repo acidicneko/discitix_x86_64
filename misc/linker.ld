@@ -1,46 +1,50 @@
-ENTRY(_start)
+OUTPUT_FORMAT(elf64-x86-64)
 
-KERNEL_VIRTUAL_BASE = 0xFFFF800000000000;
-KERNEL_PHYSICAL_BASE = 0x100000;
+ENTRY(kmain)
+
+PHDRS
+{
+    limine_requests PT_LOAD;
+    text PT_LOAD;
+    rodata PT_LOAD;
+    data PT_LOAD;
+}
 
 SECTIONS
 {
-    . = KERNEL_PHYSICAL_BASE;
+    . = 0xffffffff80000000;
     
-    .stivale2hdr ALIGN(4K) : AT(ADDR(.stivale2hdr))
-    {
-        KEEP(*(.stivale2hdr))
-    }
+    .limine_requests : {
+        KEEP(*(.limine_requests_start))
+        KEEP(*(.limine_requests))
+        KEEP(*(.limine_requests_end))
+    } :limine_requests
 
-    .text ALIGN(4K) : AT(ADDR(.text))
-    {
+    . = ALIGN(CONSTANT(MAXPAGESIZE));
+
+    .text : {
         *(.text .text.*)
-    }
+    } :text
 
-    .rodata ALIGN(4K) : AT(ADDR(.rodata))
-    {
+    . = ALIGN(CONSTANT(MAXPAGESIZE));
+
+    .rodata : {
         *(.rodata .rodata.*)
-    }
+    } :rodata
 
-    .data ALIGN(4K) : AT(ADDR(.data))
-    {
+    . = ALIGN(CONSTANT(MAXPAGESIZE));
+
+    .data : {
         *(.data .data.*)
-    }
+    } :data
 
-    .bss ALIGN(4K) : AT(ADDR(.bss))
-    {
-        *(COMMON)
+    .bss : {
         *(.bss .bss.*)
-    }
+        *(COMMON)
+    } :data
 
-    kernel_start = KERNEL_PHYSICAL_BASE;
-    kernel_end = .;
-    kernel_size = kernel_end - kernel_start;
-
-    /DISCARD/ :
-    {
-        *(.eh_frame)
+    /DISCARD/ : {
+        *(.eh_frame*)
         *(.note .note.*)
     }
 }
-

@@ -29,7 +29,6 @@ SOFTWARE. */
 #include <drivers/serial.h>
 #include <drivers/tty/psf2.h>
 #include <drivers/tty/tty.h>
-#include <fs/initrd.h>
 #include <fs/stripFS.h>
 #include <init/stivale2.h>
 #include <libk/shell.h>
@@ -38,13 +37,12 @@ SOFTWARE. */
 #include <libk/utils.h>
 #include <mm/pmm.h>
 
-void init_kernel(struct stivale2_struct *bootinfo) {
+void init_kernel() {
   initial_psf_setup();
-  init_arg_parser(bootinfo);
+  init_arg_parser();
   if (!arg_exist("noserial")) {
     serial_init(COM1_PORT);
   }
-
   init_gdt();
   init_idt();
   init_isr();
@@ -52,10 +50,10 @@ void init_kernel(struct stivale2_struct *bootinfo) {
   keyboard_install();
   pit_install(100);
   IRQ_START;
-  init_pmm(bootinfo);
-  init_initrd_stripFS(bootinfo);
+  init_pmm();
+  init_initrd_stripFS();
 
-  init_tty(bootinfo);
+  init_tty();
   if (arg_exist("gruvbox")) {
     init_colors(0x282828, 0xcc241d, 0x98971a, 0xd79921, 0x458588, 0xb16286,
                 0x689d6a, 0xa89984, 0x928374, 0xfb4934, 0xb8bb26, 0xfabd2f,
@@ -65,14 +63,12 @@ void init_kernel(struct stivale2_struct *bootinfo) {
                 0xECEFF4, 0x8FBCBB, 0x88C0D0, 0x81A1C1, 0x5E81AC, 0xBF616A,
                 0xD08770, 0xEBCB8B, 0xA3BE8C, 0xB48EAD);
   }
-  printf("\nBootloader: %s\nBootloader Version: %s\n",
-         bootinfo->bootloader_brand, bootinfo->bootloader_version);
   dbgln("Kernel initialised successfully!\n\r");
   print_font_details();
 }
 
-void kmain(struct stivale2_struct *bootinfo) {
-  init_kernel(bootinfo);
+void kmain() {
+  init_kernel();
   sysfetch();
   init_shell();
   for (;;) {
