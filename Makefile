@@ -71,9 +71,6 @@ run:
 	@qemu-system-x86_64 -drive format=raw,file=$(IMAGE) -m 128M -serial stdio
 
 setup:
-	@echo Building and installing echFS utils
-	@make -C echfs
-	@make install -C echfs
 	@echo Building Limine
 	@make -C limine
 	@echo Building stripctl
