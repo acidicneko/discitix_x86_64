@@ -35,6 +35,7 @@ SOFTWARE. */
 #include <libk/stdio.h>
 #include <libk/string.h>
 #include <libk/utils.h>
+#include <mm/liballoc.h>
 #include <mm/pmm.h>
 
 void init_kernel() {
@@ -51,6 +52,7 @@ void init_kernel() {
   pit_install(100);
   IRQ_START;
   init_pmm();
+  liballoc_init();
   init_initrd_stripFS();
 
   init_tty();

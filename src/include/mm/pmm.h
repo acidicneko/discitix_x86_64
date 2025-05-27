@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define PAGE_SIZE 0x1000
+#define PAGE_SIZE 4096
 #define PHYS_MEM_OFFSET 0xffff800000000000
 
 void *pmalloc(size_t pages);

@@ -40,15 +40,15 @@ void pmm_alloc_page(void *adr) { BIT_SET((size_t)adr / PAGE_SIZE); }
 void pmm_free_pages(void *adr, size_t page_count) {
   for (size_t i = 0; i < page_count; i++) {
     pmm_free_page((void *)(adr + (i * PAGE_SIZE)));
-    free_mem += page_count * PAGE_SIZE;
   }
+  free_mem += page_count * PAGE_SIZE;
 }
 
 void pmm_alloc_pages(void *adr, size_t page_count) {
   for (size_t i = 0; i < page_count; i++) {
     pmm_alloc_page((void *)(adr + (i * PAGE_SIZE)));
-    free_mem -= page_count * PAGE_SIZE;
   }
+  free_mem -= page_count * PAGE_SIZE;
 }
 
 void *pmalloc(size_t pages) {
