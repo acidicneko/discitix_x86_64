@@ -1,6 +1,7 @@
 #include <arch/ports.h>
 #include <arch/x86_64/irq.h>
 #include <drivers/pit.h>
+#include <drivers/tty/tty.h>
 #include <libk/utils.h>
 
 volatile uint64_t pit_ticks = 0;
@@ -9,6 +10,12 @@ uint16_t hz = 0;
 void pit_handler(register_t *regs) {
   (void)regs;
   pit_ticks++;
+
+  if (tty_initialized) {
+    if (pit_ticks % (hz / 2) == 0) {
+      tty_toggle_cursor_visibility();
+    }
+  }
 }
 
 void set_frequency(uint16_t h) {

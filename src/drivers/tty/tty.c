@@ -16,6 +16,8 @@ uint32_t currentFg;
 uint32_t x_cursor;
 uint32_t y_cursor;
 
+bool tty_initialized = false;
+
 fb_info_t *current_fb = NULL;
 
 void init_tty() {
@@ -24,6 +26,7 @@ void init_tty() {
   y_cursor = 0;
   current_fb = get_fb_info();
   load_embedded_psf2();
+  tty_initialized = true;
   // tty_paint_cursor(x_cursor, y_cursor);
 }
 
@@ -119,7 +122,14 @@ void tty_paint_cell_psf(terminal_cell_t cell) {
   }
 }
 
+void tty_hide_cursor() {
+  terminal_cell_t cell = {
+      .printable_char = ' ', .fg = currentFg, .bg = currentBg};
+  tty_paint_cell_psf(cell); // Overwrites the previous cursor cell
+}
+
 void tty_putchar_raw(char c) {
+  tty_hide_cursor(); // Hide the cursor before printing
   switch (c) {
   case '\n':
     x_cursor = 0;
@@ -135,9 +145,18 @@ void tty_putchar_raw(char c) {
     break;
 
   case '\b':
-    x_cursor--;
-    tty_putchar_raw(' ');
-    x_cursor--;
+    if (x_cursor > 0) {
+      x_cursor--;
+    } else if (y_cursor > 0) {
+      y_cursor--;
+      x_cursor = (current_fb->width / g_font.header->width) - 1;
+    }
+
+    {
+      terminal_cell_t blank = {
+          .printable_char = ' ', .fg = currentFg, .bg = currentBg};
+      tty_paint_cell_psf(blank); // Draw blank at new cursor
+    }
     break;
 
   default:
@@ -157,22 +176,31 @@ void tty_putchar_raw(char c) {
     x_cursor = 0;
     y_cursor--;
   }
-  // tty_paint_cursor(x_cursor, y_cursor);
+  tty_paint_cursor(x_cursor, y_cursor);
 }
 
 void tty_putchar(char c) { hansi_handler(c); }
 
 // IN CONSTRUCTION! DO NOT USE!
 void tty_paint_cursor(uint32_t x, uint32_t y) {
-  uint8_t ix, iy;
-  for (iy = 0; iy < 8; iy++) {
-    for (ix = 0; ix < 8; ix++) {
-      if ((font[128][iy] >> ix) & 1) {
-        framebuffer_put_pixel(ix + x * GLYPH_WIDTH, iy + y * GLYPH_HEIGHT,
-                              colors[7]);
-      }
-    }
+  terminal_cell_t cell = {
+      .printable_char = '_', .fg = currentFg, .bg = currentBg};
+  // tty_paint_cell(cell);
+  tty_paint_cell_psf(cell);
+  x_cursor = x;
+  y_cursor = y;
+}
+
+void tty_toggle_cursor_visibility() {
+  static int cursor_visible = 1;
+  if (cursor_visible) {
+    tty_paint_cursor(x_cursor, y_cursor);
+  } else {
+    terminal_cell_t cell = {
+        .printable_char = ' ', .fg = currentFg, .bg = currentBg};
+    tty_paint_cell_psf(cell);
   }
+  cursor_visible = !cursor_visible;
 }
 
 void set_currentFg(uint32_t value) { currentFg = value; }

@@ -45,8 +45,10 @@ $(IMAGE): $(TARGET)
 	sudo cp limine/limine*.sys build/mnt/ && \
 	sudo ./limine/limine bios-install $(IMAGE) && \
 	sudo umount build/mnt && \
-	sudo losetup -d $${LOOPDEV} && \
-	echo "[DONE]"
+	sudo losetup -d $${LOOPDEV}
+	@echo "[STRIPCTL]"
+	@./stripFS/build/stripctl misc/initrd/initrd.img $(INITRD_FILES)
+	@echo "[DONE]"
 
 $(TARGET): $(OFILES)
 	@echo [LD] $(TARGET)
