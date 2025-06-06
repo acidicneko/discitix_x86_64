@@ -13,6 +13,35 @@ Join Discitix's own [Discord Server](https://discord.gg/6a9C3r2fGU)
 ![Settings Window](https://raw.githubusercontent.com/acidicneko/discitix_x86_64/main/images/kernel.png)
 
 ## Building
+
+Clone this repo with -
+```
+git clone --recurse-submodules https://github.com/acidicneko/discitix_x86_64.git
+```
+
+### Using Nix shell configuration
+You can use the Nix shell configuration to build the kernel.
+
+Enter the nix shell with the following command:
+```bash
+nix-shell
+```
+
+Run the following command the first time to set up the environment:
+```bash
+make setup
+```
+
+Then, you can build the kernel with:
+```bash
+make
+```
+To run the kernel, use:
+```bash
+make run
+```
+
+### Natively on system
 Please install libuuid, libfuse and pkgconfig for echFS utils.
 Install these too:
 - QEMU
@@ -21,11 +50,7 @@ Install these too:
 - NASM
 - Parted
 
-After installing all prerequsites, clone this repo with -
-```
-git clone --recurse-submodules https://github.com/acidicneko/discitix_x86_64.git
-```
-If you are building for first time, run `make setup` as root.
+After installing all prerequsites, if you are building for first time, run `make setup` as root.
 
 To build the kernel do `make` in project's root.
 
