@@ -31,6 +31,8 @@ IMAGE = build/image.hdd
 .PHONY: clean all setup
 
 $(IMAGE): $(TARGET)
+	@echo "[STRIPCTL]"
+	@./stripFS/build/stripctl misc/initrd/initrd.img $(INITRD_FILES)
 	@echo [CREATE IMAGE]
 	@dd if=/dev/zero of=$(IMAGE) bs=1M count=64
 	@parted -s $(IMAGE) mklabel msdos
@@ -46,8 +48,6 @@ $(IMAGE): $(TARGET)
 	sudo ./limine/limine bios-install $(IMAGE) && \
 	sudo umount build/mnt && \
 	sudo losetup -d $${LOOPDEV}
-	@echo "[STRIPCTL]"
-	@./stripFS/build/stripctl misc/initrd/initrd.img $(INITRD_FILES)
 	@echo "[DONE]"
 
 $(TARGET): $(OFILES)
