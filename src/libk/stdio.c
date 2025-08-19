@@ -229,9 +229,10 @@ void gets(char *to) {
   while (1) {
     c = keyboard_read();
     if (c == '\b') {
-      if (index != 0)
+      if (index != 0) {
         index--;
-      putchar(c);
+        putchar(c);
+      }
     } else if (c == '\n') {
       to[index] = '\0';
       putchar(c);
