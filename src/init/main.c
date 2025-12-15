@@ -38,6 +38,7 @@ SOFTWARE. */
 #include <mm/liballoc.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
+#include <sched/scheduler.h>
 
 void init_kernel() {
   initial_psf_setup();
@@ -50,6 +51,7 @@ void init_kernel() {
   init_isr();
   init_irq();
   keyboard_install();
+  init_scheduler();
   pit_install(100);
   IRQ_START;
   init_pmm();
@@ -74,7 +76,8 @@ void init_kernel() {
 void kmain() {
   init_kernel();
   sysfetch();
-  init_shell();
+  create_task((void *)init_shell, (void *)NULL, 2);
+
   for (;;) {
     asm("hlt");
   }

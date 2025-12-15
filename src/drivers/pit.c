@@ -3,13 +3,16 @@
 #include <drivers/pit.h>
 #include <drivers/tty/tty.h>
 #include <libk/utils.h>
+#include <sched/scheduler.h>
 
 volatile uint64_t pit_ticks = 0;
 uint16_t hz = 0;
 
 void pit_handler(register_t *regs) {
-  (void)regs;
   pit_ticks++;
+
+  // run scheduler tick (preemptive round-robin)
+  schedule_tick(regs);
 
   if (tty_initialized) {
     if (pit_ticks % (hz / 2) == 0) {

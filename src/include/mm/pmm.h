@@ -14,6 +14,9 @@ int init_pmm();
 uint32_t get_total_physical_memory();
 uint32_t get_free_physical_memory();
 
+/* Helpers to convert addresses using the HHDM (higher-half direct-map)
+	offset. Call these after init_pmm() has run. */
+void *phys_from_virt(void *virt);
 void *virt_from_phys(void *phys);
 
 
