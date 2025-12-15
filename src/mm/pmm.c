@@ -17,51 +17,65 @@ static uintptr_t highest_page = 0;
 static uint32_t total_mem = 0;
 static uint32_t free_mem = 0;
 
-void *get_physical_address(void *adr) {
-  if ((uintptr_t)adr < PHYS_MEM_OFFSET)
+// HHDM offset (higher-half direct map) provided by Limine if available.
+// Populated during init_pmm(). Use this to convert between physical and
+// virtual addresses inside the PMM implementation.
+static uintptr_t hhdm_offset = 0ULL;
+
+static void *get_physical_address(void *adr) {
+  if (hhdm_offset == 0)
+    return adr; // assume already physical if offset unknown
+
+  if ((uintptr_t)adr < hhdm_offset)
     return adr;
 
-  return (void *)((uintptr_t)adr - PHYS_MEM_OFFSET);
+  return (void *)((uintptr_t)adr - hhdm_offset);
 }
 
-void *get_virtual_address(void *adr) {
-  if ((uintptr_t)adr >= PHYS_MEM_OFFSET)
+static void *get_virtual_address(void *adr) {
+  if (hhdm_offset == 0)
     return adr;
 
-  return (void *)((uintptr_t)adr + PHYS_MEM_OFFSET);
+  if ((uintptr_t)adr >= hhdm_offset)
+    return adr;
+
+  return (void *)((uintptr_t)adr + hhdm_offset);
 }
 
 void pmm_free_page(void *adr) {
   BIT_CLEAR((size_t)get_physical_address(adr) / PAGE_SIZE);
 }
 
-void pmm_alloc_page(void *adr) { BIT_SET((size_t)adr / PAGE_SIZE); }
+void pmm_alloc_page(void *adr) { BIT_SET((size_t)get_physical_address(adr) / PAGE_SIZE); }
 
 void pmm_free_pages(void *adr, size_t page_count) {
   for (size_t i = 0; i < page_count; i++) {
-    pmm_free_page((void *)(adr + (i * PAGE_SIZE)));
+    pmm_free_page((void *)((uintptr_t)adr + (i * PAGE_SIZE)));
   }
   free_mem += page_count * PAGE_SIZE;
 }
 
 void pmm_alloc_pages(void *adr, size_t page_count) {
   for (size_t i = 0; i < page_count; i++) {
-    pmm_alloc_page((void *)(adr + (i * PAGE_SIZE)));
+    pmm_alloc_page((void *)((uintptr_t)adr + (i * PAGE_SIZE)));
   }
   free_mem -= page_count * PAGE_SIZE;
 }
 
 void *pmalloc(size_t pages) {
-  for (size_t i = 0; i < highest_page / PAGE_SIZE; i++)
+  size_t max_pages = highest_page / PAGE_SIZE;
+
+  for (size_t i = 0; i < max_pages; i++) {
     for (size_t j = 0; j < pages; j++) {
-      if (BIT_TEST(i))
+      if (BIT_TEST(i + j))
         break;
       else if (j == pages - 1) {
-        pmm_alloc_pages((void *)(i * PAGE_SIZE), pages);
-        // return (void *)(i * PAGE_SIZE) + PHYS_MEM_OFFSET;
-        return get_virtual_address((void *)(i * PAGE_SIZE));
+        uintptr_t phys_addr = (uintptr_t)(i * PAGE_SIZE);
+        pmm_alloc_pages((void *)phys_addr, pages);
+        return get_virtual_address((void *)phys_addr);
       }
     }
+  }
 
   dbgln("PMM: Ran out of memory! Halting!\n\r");
   while (1)
@@ -75,10 +89,13 @@ void *pcalloc(size_t pages) {
   if (ret == NULL)
     return NULL;
 
-  memset((void *)((uint64_t)ret /*+ PHYS_MEM_OFFSET*/), 0, pages * PAGE_SIZE);
+  memset((void *)ret, 0, pages * PAGE_SIZE);
 
   return ret;
 }
+
+void *phys_from_virt(void *virt) { return get_physical_address(virt); }
+void *virt_from_phys(void *phys) { return get_virtual_address(phys); }
 
 int init_pmm() {
   struct limine_memmap_response *memory_info = memmap_request.response;
@@ -105,8 +122,13 @@ int init_pmm() {
     struct limine_memmap_entry *entry = memory_info->entries[i];
 
     if (entry->type == LIMINE_MEMMAP_USABLE && entry->length >= bitmap_size) {
-      // TODO: Check if i need to add PHYS_MEM_OFFSET here
-      pmm_bitmap = (uint8_t *)(entry->base + PHYS_MEM_OFFSET);
+      // Use Limine's HHDM offset (if provided) to get a usable virtual address
+      // to place the bitmap. If no HHDM is provided, assume the kernel has
+      // already been mapped appropriately and use the physical address as-is.
+      if (hhdm_request.response)
+        hhdm_offset = hhdm_request.response->offset;
+
+      pmm_bitmap = (uint8_t *)get_virtual_address((void *)entry->base);
       entry->base += bitmap_size;
       entry->length -= bitmap_size;
       break;

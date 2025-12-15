@@ -37,6 +37,7 @@ SOFTWARE. */
 #include <libk/utils.h>
 #include <mm/liballoc.h>
 #include <mm/pmm.h>
+#include <mm/vmm.h>
 
 void init_kernel() {
   initial_psf_setup();
@@ -53,6 +54,7 @@ void init_kernel() {
   IRQ_START;
   init_pmm();
   liballoc_init();
+  init_vmm();
   init_initrd_stripFS();
 
   init_tty();
