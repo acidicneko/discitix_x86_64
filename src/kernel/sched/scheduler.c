@@ -1,4 +1,4 @@
-#include <sched/scheduler.h>
+#include <kernel/sched/scheduler.h>
 #include <mm/pmm.h>
 #include <libk/string.h>
 #include <libk/utils.h>

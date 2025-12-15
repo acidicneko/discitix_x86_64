@@ -31,6 +31,7 @@ SOFTWARE. */
 #include <drivers/tty/tty.h>
 #include <fs/stripFS.h>
 #include <init/stivale2.h>
+#include <kernel/sched/scheduler.h>
 #include <libk/shell.h>
 #include <libk/stdio.h>
 #include <libk/string.h>
@@ -38,7 +39,6 @@ SOFTWARE. */
 #include <mm/liballoc.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
-#include <sched/scheduler.h>
 
 void init_kernel() {
   initial_psf_setup();

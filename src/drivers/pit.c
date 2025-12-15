@@ -2,8 +2,8 @@
 #include <arch/x86_64/irq.h>
 #include <drivers/pit.h>
 #include <drivers/tty/tty.h>
+#include <kernel/sched/scheduler.h>
 #include <libk/utils.h>
-#include <sched/scheduler.h>
 
 volatile uint64_t pit_ticks = 0;
 uint16_t hz = 0;
