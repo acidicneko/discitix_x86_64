@@ -146,6 +146,21 @@ char *strcpy(char *dst, const char *src) {
   return dst;
 }
 
+char *strncpy(char *dst, const char *src, size_t n) {
+  char *p = dst;
+  size_t i;
+
+  for (i = 0; i < n && src[i] != '\0'; i++) {
+    p[i] = src[i];
+  }
+
+  for (; i < n; i++) {
+    p[i] = '\0';
+  }
+
+  return dst;
+}
+
 int strcmp(const char *s1, const char *s2) {
   while (*s1 == *s2) {
     if (*s1 == '\0') {

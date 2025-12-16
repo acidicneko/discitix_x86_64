@@ -2,6 +2,8 @@
 #define __STRIP_FS__
 
 #include <init/stivale2.h>
+#include <kernel/vfs/vfs.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #define MAGIC_1 0x69
@@ -22,5 +24,10 @@ void init_initrd_stripFS();
 int read_initrd_stripFS();
 int stat_file_stripFS(const char *filename, strip_fs_file_t *fp);
 int read_file_stripFS(strip_fs_file_t *fp, uint8_t *buffer);
+
+long stripfs_file_read(file_t *f, void *buf, size_t len, uint64_t off);
+int stripfs_file_open(inode_t *inode, uint32_t flags);
+int stripfs_file_close(inode_t *inode);
+inode_t *stripfs_dir_lookup(inode_t *parent, const char *name);
 
 #endif // !__STRIP_FS__
