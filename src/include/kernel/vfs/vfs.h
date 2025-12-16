@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #define NAME_MAX 255
+#define PATH_MAX 4096
 
 typedef struct file file_t;
 typedef struct inode inode_t;
@@ -85,5 +86,6 @@ long vfs_write(file_t *file, const void *buf, size_t len);
 int vfs_mount(superblock_t *sb, const char *mount_point);
 superblock_t *vfs_get_root_superblock();
 int vfs_lookup(inode_t *parent, const char *name, inode_t **result_inode);
+int vfs_lookup_path(const char *path, inode_t **result_inode);
 
 #endif /* __VFS_H__ */

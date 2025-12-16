@@ -45,6 +45,39 @@ int vfs_lookup(inode_t *parent, const char *name, inode_t **result_inode) {
     return 0;
 }
 
+
+int vfs_lookup_path(const char *path, inode_t **result_inode) {
+	if (!path || !result_inode) return -1;
+
+	if (!root_superblock || !root_superblock->root || !root_superblock->root->inode) {
+		return -1;
+	}
+
+	inode_t *current_inode = root_superblock->root->inode;
+
+	char path_copy[PATH_MAX];
+	strncpy(path_copy, path, PATH_MAX - 1);
+	path_copy[PATH_MAX - 1] = '\0';
+
+	char *token = strtok(path_copy, "/");
+	while (token) {
+		if (!current_inode->is_directory) {
+			return -1;
+		}
+
+		inode_t *next_inode = NULL;
+		if (vfs_lookup(current_inode, token, &next_inode) != 0) {
+			return -1;
+		}
+
+		current_inode = next_inode;
+		token = strtok(NULL, "/");
+	}
+
+	*result_inode = current_inode;
+	return 0;
+}
+
 superblock_t *vfs_get_root_superblock() {
 	return root_superblock;
 }

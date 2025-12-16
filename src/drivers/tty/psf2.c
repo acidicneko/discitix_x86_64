@@ -18,15 +18,9 @@ void initial_psf_setup() {
 
 void load_embedded_psf2() {
   file_t* font = NULL;
-  superblock_t* sb = vfs_get_root_superblock();
-  if (!sb || !sb->root || !sb->root->inode) {
-    dbgln("No filesystem mounted, cannot load font!\n\r");
-    return;
-  }
-  sb->root->inode->is_directory = 1; 
   inode_t *font_inode = NULL;
-  if (vfs_lookup(sb->root->inode, "font.psf", &font_inode) != 0) {
-    dbgln("Font file not found in root filesystem!\n\r");
+  if(vfs_lookup_path("/font.psf", &font_inode) != 0) {
+    dbgln("Font file not found in /font.psf\n\r");
     return;
   }
   if (vfs_open(&font, font_inode, 0) != 0) {
@@ -62,7 +56,7 @@ void load_embedded_psf2() {
 
   // Calculate glyph data pointer
   void *glyph_data = (void *)font_buffer + font_header->headersize;
-  // Store the glyph data globally if needed for rendering
+  
   g_font.header = font_header;
   g_font.glyphBuffer = glyph_data;
   psf2_loaded = true;
