@@ -63,11 +63,11 @@ After building the kernel, run it with, `make run`
 - [x] High resolution PSF2 Fonts
 - [x] Physical Memory Manager
 - [x] Interrupts implemented
-- [ ] Virtual Memory Manager
+- [x] Virtual Memory Manager
 - [ ] Heap memory
-- [ ] VFS
+- [x] VFS
 - [ ] HDD driver
 - [ ] echFS
 - [ ] Syscalls
 - [ ] ELF execution
-- [ ] Process Management
+- [x] Process Management
