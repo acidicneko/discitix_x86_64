@@ -1,8 +1,9 @@
-#include "libk/utils.h"
+#include <libk/utils.h>
 #include <drivers/tty/psf2.h>
 #include <drivers/tty/tty.h>
 #include <fs/stripFS.h>
 #include <libk/stdio.h>
+#include <kernel/vfs/vfs.h>
 #include <mm/pmm.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -16,15 +17,31 @@ void initial_psf_setup() {
 }
 
 void load_embedded_psf2() {
-  strip_fs_file_t fp;
-  stat_file_stripFS("font.psf", &fp);
-  dbgln("Filename: %s\n\rFile size:%d\n\r", fp.filename, fp.length);
-  uint8_t *font_buffer = pmalloc((fp.length + PAGE_SIZE - 1) / PAGE_SIZE);
-
-  read_file_stripFS(&fp, font_buffer);
-
-  // psf2_header_t *font_header =
-  //     (psf2_header_t *)(void *)&_binary_misc_default_psf_start;
+  file_t* font = NULL;
+  superblock_t* sb = vfs_get_root_superblock();
+  if (!sb || !sb->root || !sb->root->inode) {
+    dbgln("No filesystem mounted, cannot load font!\n\r");
+    return;
+  }
+  sb->root->inode->is_directory = 1; 
+  inode_t *font_inode = NULL;
+  if (vfs_lookup(sb->root->inode, "font.psf", &font_inode) != 0) {
+    dbgln("Font file not found in root filesystem!\n\r");
+    return;
+  }
+  if (vfs_open(&font, font_inode, 0) != 0) {
+    dbgln("Failed to open font file!\n\r");
+    return;
+  }
+  uint8_t *font_buffer = pmalloc((font->inode->size + PAGE_SIZE - 1) / PAGE_SIZE);
+  long read_bytes = vfs_read(font, font_buffer, font->inode->size);
+  if (read_bytes != (long)font->inode->size) {
+    dbgln("Failed to read entire font file!\n\r");
+    pmm_free_pages(font_buffer, (font->inode->size + PAGE_SIZE - 1) / PAGE_SIZE);
+    return;
+  }
+  vfs_close(font);
+  dbgln("Font file size: %ul bytes\n\r",font->inode->size);
   psf2_header_t *font_header = (psf2_header_t *)(void *)font_buffer;
 
   // Validate magic number
