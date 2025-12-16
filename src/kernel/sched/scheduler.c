@@ -13,6 +13,43 @@ void init_scheduler() {
     current = NULL;
 }
 
+static void cleanup_zombies() {
+    if (!task_list) return;
+    task_t *t = task_list;
+    do {
+        task_t *next = t->next;
+        if (t->state == TASK_ZOMBIE) {
+            // Remove from list
+            if (t == task_list) {
+                if (t->next == t) {
+                    task_list = NULL;
+                } else {
+                    task_list = t->next;
+                    task_t *tail = task_list;
+                    while (tail->next != t) tail = tail->next;
+                    tail->next = task_list;
+                }
+            } else {
+                task_t *prev = task_list;
+                while (prev->next != t) prev = prev->next;
+                prev->next = t->next;
+                if (t == task_list) task_list = t->next;
+            }
+            // Free memory
+            pmm_free_pages(t->stack_base, t->stack_pages);
+            pmm_free_pages(t, 1);
+            dbgln("SCHED: cleaned up task id=%d\n\r", t->id);
+        }
+        t = next;
+    } while (t != task_list && task_list);
+}
+
+static void task_exit() {
+    current->state = TASK_ZOMBIE;
+    dbgln("SCHED: task id=%d exited\n\r", current->id);
+    for (;;) asm("hlt");
+}
+
 static void sweep_wakeup(void) {
     if (!task_list) return;
     uint64_t ticks = get_ticks();
@@ -53,8 +90,7 @@ static void prepare_initial_frame(task_t *t, void (*entry)(void *), void *arg) {
     stk_top &= ~0xFULL;
     
     stk_top -= 8; // for return address
-    *(uint64_t *)stk_top = 0;
-    stk_top -= 8; 
+    *(uint64_t *)stk_top = (uint64_t)task_exit;
 
     t->regs.rsp = stk_top;
     t->regs.ss = 0x10; 
@@ -123,4 +159,6 @@ void schedule_tick(register_t *regs) {
     current = next;
 
     memcpy((uint8_t *)regs, (const uint8_t *)&current->regs, sizeof(register_t));
+
+    cleanup_zombies();
 }
