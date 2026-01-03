@@ -47,6 +47,7 @@ static void cleanup_zombies() {
 static void task_exit() {
     current->state = TASK_ZOMBIE;
     dbgln("SCHED: task id=%d exited\n\r", current->id);
+    cleanup_zombies();
     for (;;) asm("hlt");
 }
 
@@ -159,6 +160,5 @@ void schedule_tick(register_t *regs) {
     current = next;
 
     memcpy((uint8_t *)regs, (const uint8_t *)&current->regs, sizeof(register_t));
-
-    cleanup_zombies();
+    
 }
