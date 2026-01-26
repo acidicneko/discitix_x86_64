@@ -20,8 +20,6 @@ int execute(char **argv, int argc) {
       dbgln("%s ", argv[i]);
     }
     dbgln("\n\r");
-  } else if (!strcmp(argv[0], "read")) {
-    read_initrd_stripFS();
   } else if (!strcmp(argv[0], "echo")) {
     for (uint8_t i = 1; i < argc; i++) {
       printf("%s ", argv[i]);
@@ -76,7 +74,7 @@ int execute(char **argv, int argc) {
     }
     buffer[bytes_read] = '\0'; // null-terminate the buffer
     // printf("%s\n", buffer);
-    inode_t *i = kmalloc(sizeof(inode_t));
+    inode_t *i = NULL; 
   
     file_t* tty = NULL;
   
@@ -85,7 +83,6 @@ int execute(char **argv, int argc) {
     vfs_write(tty, (void*)buffer, bytes_read);
 
     vfs_close(tty);
-    kfree(i);
     vfs_close(file);
   } else if(!strcmp(argv[0], "exit")) {
     return 1;
