@@ -1,4 +1,5 @@
 #include "libk/utils.h"
+#include "mm/pmm.h"
 #include <drivers/framebuffer.h>
 #include <drivers/tty/font.h>
 #include <drivers/tty/hansi_parser.h>
@@ -6,7 +7,12 @@
 #include <drivers/tty/tty.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
+#include <mm/liballoc.h>
+#include <kernel/vfs/vfs.h>
+#include <stdlib.h>
+#include <string.h>
+
+
 
 uint32_t colors[16];
 
@@ -20,12 +26,58 @@ bool tty_initialized = false;
 
 fb_info_t *current_fb = NULL;
 
+long tty_write(file_t* file, const void* data, size_t len, uint64_t off){
+  (void)file;
+  (void)off;
+  if (!data) {
+    return -1;
+  }
+  const char* str = (const char*)data;
+  size_t bytes_wrote = 0;
+  while(bytes_wrote < len && str[bytes_wrote]!=0){
+    tty_putchar(str[bytes_wrote]);
+    bytes_wrote++;
+  }
+  return (long)bytes_wrote;
+}
+
+inode_t* tty_node = NULL;
+static file_operations_t tty_file_ops = {
+  .read = NULL,
+  .write = tty_write,
+  .open = NULL,
+  .close = NULL
+};
+
+
 void init_tty() {
   init_framebuffer();
   x_cursor = 0;
   y_cursor = 0;
   current_fb = get_fb_info();
   load_embedded_psf2();
+
+  tty_node = (inode_t*)kmalloc(sizeof(inode_t));  
+  memset(tty_node, 0, sizeof(inode_t));
+  tty_node->atime = 0;
+  tty_node->ctime = 0;
+  tty_node->is_directory = 0;
+  tty_node->size = 0;
+  tty_node->ino = 6969;
+  tty_node->f_ops = &tty_file_ops;
+
+  superblock_t* root_sb = vfs_get_root_superblock();
+  
+  dentry_t *d = (dentry_t *)kmalloc(sizeof(dentry_t));
+  memset(d, 0, sizeof(dentry_t));
+  strncpy(d->name, "tty0", 5);
+  d->name[NAME_MAX - 1] = '\0';
+  d->inode = tty_node;
+  d->parent = root_sb->root;
+  d->next = root_sb->root->next;
+  root_sb->root->next = d;
+
+  dbgln("TTY registered as /tty0\n\r");
   tty_initialized = true;
   // tty_paint_cursor(x_cursor, y_cursor);
 }

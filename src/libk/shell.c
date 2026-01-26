@@ -1,3 +1,4 @@
+#include "mm/liballoc.h"
 #include <drivers/tty/tty.h>
 #include <fs/stripFS.h>
 #include <kernel/vfs/vfs.h>
@@ -74,13 +75,24 @@ int execute(char **argv, int argc) {
       return -1;
     }
     buffer[bytes_read] = '\0'; // null-terminate the buffer
-    printf("%s\n", buffer);
+    // printf("%s\n", buffer);
+    inode_t *i = kmalloc(sizeof(inode_t));
+  
+    file_t* tty = NULL;
+  
+    vfs_lookup_path("/tty0", &i);
+    vfs_open(&tty, i, 0);
+    vfs_write(tty, (void*)buffer, bytes_read);
+
+    vfs_close(tty);
+    kfree(i);
     vfs_close(file);
   } else if(!strcmp(argv[0], "exit")) {
     return 1;
   } else {
     printf("ayu.sh: %s: unknown command\n\n", argv[0]);
   }
+  return 0;
 }
 
 void init_shell() {
