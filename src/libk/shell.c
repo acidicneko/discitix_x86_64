@@ -7,6 +7,7 @@
 #include <libk/string.h>
 #include <libk/utils.h>
 #include <mm/pmm.h>
+#include <stdint.h>
 
 int execute(char **argv, int argc) {
   if (!strcmp(argv[0], "uname")) {
@@ -41,7 +42,23 @@ int execute(char **argv, int argc) {
     dentry_t *d = sb->root;
     d = d->next; // skip root itself
     while (d) {
-      printf("%s\n", d->name);
+      uint32_t mode = d->inode->mode;
+      if((mode & (1 << 2))){
+        printf("r");
+      } else {
+        printf("-");
+      }
+      if((mode & (1 << 1))){
+        printf("w");
+      } else {
+        printf("-");
+      }
+      if(mode & (1 << 0)){
+        printf("x");
+      } else {
+        printf("-");
+      }
+      printf("  %s\n", d->name);
       d = d->next;
     }
     printf("\n");

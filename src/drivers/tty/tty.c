@@ -1,5 +1,4 @@
 #include "libk/utils.h"
-#include "mm/pmm.h"
 #include <drivers/framebuffer.h>
 #include <drivers/tty/font.h>
 #include <drivers/tty/hansi_parser.h>
@@ -65,6 +64,7 @@ void init_tty() {
   tty_node->size = 0;
   tty_node->ino = 6969;
   tty_node->f_ops = &tty_file_ops;
+  tty_node->mode = 6;
 
   superblock_t* root_sb = vfs_get_root_superblock();
   

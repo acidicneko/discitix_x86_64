@@ -100,7 +100,7 @@ int stripfs_create_and_mount() {
       inode->f_ops = &stripfs_fops;
       inode->i_ops = NULL;
       inode->private = (void *)filemeta; /* store meta pointer */
-
+      inode->mode = 4;
       dentry_t *d = (dentry_t *)pmalloc(1);
       if (!d) {
           pmm_free_pages(inode, 1);

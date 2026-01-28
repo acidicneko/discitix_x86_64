@@ -3,6 +3,7 @@
 #include <drivers/tty/tty.h>
 #include <libk/stdio.h>
 #include <libk/string.h>
+#include <stdarg.h>
 
 void putchar(char c) { tty_putchar(c); }
 
@@ -41,6 +42,11 @@ int __vsprintf__(char *fmt, va_list args, void (*putchar_func)(char c),
       case 'i':
         integer = va_arg(args, int);
         itoa(integer, buffer, 10);
+        puts_func(buffer);
+        break;
+      case 'b':
+        integer = va_arg(args, int);
+        itoa(integer, buffer, 2);
         puts_func(buffer);
         break;
       case 'x':
