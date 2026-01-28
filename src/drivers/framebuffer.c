@@ -10,16 +10,6 @@
 fb_info_t fb_info;
 
 void init_framebuffer() {
-  // struct stivale2_struct_tag_framebuffer *fbtag =
-  //     (struct stivale2_struct_tag_framebuffer *)stivale2_get_tag(
-  //         bootinfo, STIVALE2_STRUCT_TAG_FRAMEBUFFER_ID);
-  // fb_info.address = (uint32_t *)(uint64_t)fbtag->framebuffer_addr;
-  // fb_info.height = fbtag->framebuffer_height;
-  // fb_info.width = fbtag->framebuffer_width;
-  // fb_info.bpp = fbtag->framebuffer_bpp;
-  // dbgln("Framebuffer: address: 0x%xl\n\rFramebuffer: Height: "
-  //       "%ui\n\rFramebuffer: Width: %ui\n\rFramebuffer: BPP: %ui\n\r",
-  //       fb_info.address, fb_info.height, fb_info.width, fb_info.bpp);
   struct limine_framebuffer_response *fb_response =
       framebuffer_request.response;
   if (!fb_response || fb_response->framebuffer_count == 0) {
