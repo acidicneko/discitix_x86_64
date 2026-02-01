@@ -130,3 +130,77 @@ IRQ  12,      44
 IRQ  13,      45
 IRQ  14,      46
 IRQ  15,      47
+
+; Syscall handler (int 0x80)
+extern syscall_dispatch
+
+global syscall_stub
+syscall_stub:
+    ; Save all registers (build register_t structure on stack)
+    push 0              ; Error code placeholder
+    push 0x80           ; Interrupt number (syscall)
+    save_regs
+    
+    ; Call syscall dispatcher with pointer to register_t
+    mov rdi, rsp
+    call syscall_dispatch
+    
+    ; Return value is in rax, store it in the saved rax position
+    mov [rsp + 14*8], rax   ; Offset to saved rax in register_t
+    
+    restore_regs
+    add rsp, 16         ; Remove int_no and err_code
+    iretq
+
+; Helper to jump to Ring 3 user mode
+; void jump_to_usermode(uint64_t entry, uint64_t user_stack)
+global jump_to_usermode
+jump_to_usermode:
+    ; rdi = user entry point
+    ; rsi = user stack pointer
+    
+    ; Set up stack frame for iretq
+    ; Stack needs: SS, RSP, RFLAGS, CS, RIP
+    
+    mov rcx, rdi        ; Save entry point
+    mov rdx, rsi        ; Save stack pointer
+    
+    ; Push SS (user data segment with RPL 3)
+    mov rax, 0x18 | 3   ; GDT_USER_DATA | RPL 3
+    push rax
+    
+    ; Push RSP (user stack pointer)
+    push rdx
+    
+    ; Push RFLAGS (enable interrupts)
+    pushfq
+    pop rax
+    or rax, 0x200       ; Set IF (interrupt flag)
+    push rax
+    
+    ; Push CS (user code segment with RPL 3)
+    mov rax, 0x20 | 3   ; GDT_USER_CODE | RPL 3
+    push rax
+    
+    ; Push RIP (user entry point)
+    push rcx
+    
+    ; Clear registers for clean usermode entry
+    xor rax, rax
+    xor rbx, rbx
+    xor rcx, rcx
+    xor rdx, rdx
+    xor rsi, rsi
+    xor rdi, rdi
+    xor rbp, rbp
+    xor r8, r8
+    xor r9, r9
+    xor r10, r10
+    xor r11, r11
+    xor r12, r12
+    xor r13, r13
+    xor r14, r14
+    xor r15, r15
+    
+    ; Switch to user mode!
+    iretq

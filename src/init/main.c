@@ -25,6 +25,7 @@ SOFTWARE. */
 #include <arch/x86_64/idt.h>
 #include <arch/x86_64/irq.h>
 #include <arch/x86_64/isr.h>
+#include <arch/x86_64/syscall.h>
 #include <drivers/keyboard.h>
 #include <drivers/pit.h>
 #include <drivers/serial.h>
@@ -59,6 +60,7 @@ void init_kernel() {
   liballoc_init();
   init_vmm();
   init_initrd_stripFS();
+  init_syscalls();
 
   init_tty();
   if (arg_exist("gruvbox")) {
@@ -74,12 +76,56 @@ void init_kernel() {
   print_font_details();
 }
 
+// Simple usermode test program (raw machine code)
+// This writes "Hello from Ring 3!\n" to stdout and then exits
+// Byte layout:
+//   0-6:   mov rax, 2        (7 bytes)
+//   7-13:  mov rdi, 1        (7 bytes)
+//   14-20: lea rsi, [rip+25] (7 bytes) - RIP after = 21, msg at 46, offset = 46-21 = 25
+//   21-27: mov rdx, 19       (7 bytes)
+//   28-29: int 0x80          (2 bytes)
+//   30-36: mov rax, 0        (7 bytes)
+//   37-43: mov rdi, 0        (7 bytes)
+//   44-45: int 0x80          (2 bytes)
+//   46+:   "Hello from Ring 3!\n"
+static uint8_t user_program[] = {
+    // mov rax, 2 (SYS_WRITE)
+    0x48, 0xc7, 0xc0, 0x02, 0x00, 0x00, 0x00,
+    // mov rdi, 1 (stdout)
+    0x48, 0xc7, 0xc7, 0x01, 0x00, 0x00, 0x00,
+    // lea rsi, [rip + 25] (0x19) - message offset
+    0x48, 0x8d, 0x35, 0x19, 0x00, 0x00, 0x00,
+    // mov rdx, 19 (length)
+    0x48, 0xc7, 0xc2, 0x13, 0x00, 0x00, 0x00,
+    // int 0x80
+    0xcd, 0x80,
+    // mov rax, 0 (SYS_EXIT)
+    0x48, 0xc7, 0xc0, 0x00, 0x00, 0x00, 0x00,
+    // mov rdi, 0 (exit code)
+    0x48, 0xc7, 0xc7, 0x00, 0x00, 0x00, 0x00,
+    // int 0x80
+    0xcd, 0x80,
+    // Message: "Hello from Ring 3!\n"
+    'H', 'e', 'l', 'l', 'o', ' ', 'f', 'r', 'o', 'm', ' ',
+    'R', 'i', 'n', 'g', ' ', '3', '!', '\n'
+};
+
 void kmain() {
   init_kernel();
   sysfetch();
+
+  // Create shell task (kernel mode) first
   create_task((void *)init_shell, (void *)NULL, 2);
 
+  // Create a usermode task via the scheduler
+  task_t *user_task = create_user_task(user_program, sizeof(user_program), 2);
+  if (user_task) {
+      dbgln("Created usermode task id=%d\n\r", user_task->id);
+  } else {
+      dbgln("Failed to create usermode task\n\r");
+  }
+
   for (;;) {
-    asm("hlt");
+    asm("sti; hlt");
   }
 }

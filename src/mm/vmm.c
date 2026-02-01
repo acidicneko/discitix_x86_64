@@ -19,8 +19,12 @@ int init_vmm() {
   return 0;
 }
 
-static uint64_t *ensure_table(uint64_t *table_entry) {
+static uint64_t *ensure_table(uint64_t *table_entry, uint64_t flags) {
   if ((*table_entry) & PTE_PRESENT) {
+    // If user flag requested, make sure it's set on existing entry too
+    if (flags & PTE_USER) {
+      *table_entry |= PTE_USER;
+    }
     uint64_t phys = (*table_entry) & 0x000ffffffffff000ULL;
     return (uint64_t *)virt_from_phys((void *)phys);
   }
@@ -32,7 +36,11 @@ static uint64_t *ensure_table(uint64_t *table_entry) {
     ((uint64_t *)virt)[i] = 0ULL;
 
   void *phys = phys_from_virt(virt);
-  *table_entry = ((uint64_t)(uintptr_t)phys & 0x000ffffffffff000ULL) | PTE_PRESENT | PTE_RW;
+  uint64_t entry_flags = PTE_PRESENT | PTE_RW;
+  if (flags & PTE_USER) {
+    entry_flags |= PTE_USER;
+  }
+  *table_entry = ((uint64_t)(uintptr_t)phys & 0x000ffffffffff000ULL) | entry_flags;
   return (uint64_t *)virt;
 }
 
@@ -52,13 +60,13 @@ int vmm_map_page(void *virt, void *phys, uint64_t flags) {
   size_t i2 = (v >> 21) & 0x1FF;
   size_t i1 = (v >> 12) & 0x1FF;
 
-  uint64_t *pdpt = ensure_table(&pml4[i4]);
+  uint64_t *pdpt = ensure_table(&pml4[i4], flags);
   if (!pdpt)
     return -1;
-  uint64_t *pd = ensure_table(&pdpt[i3]);
+  uint64_t *pd = ensure_table(&pdpt[i3], flags);
   if (!pd)
     return -1;
-  uint64_t *pt = ensure_table(&pd[i2]);
+  uint64_t *pt = ensure_table(&pd[i2], flags);
   if (!pt)
     return -1;
 
