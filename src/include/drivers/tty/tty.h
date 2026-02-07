@@ -37,7 +37,7 @@ typedef struct {
   uint16_t x_cursor;
   uint16_t y_cursor;
 
-  // Line discipline
+  // Line discipline modes
   int ldisc_mode;           // TTY_CANONICAL or TTY_RAW
   bool echo;                // Echo input to screen
   
@@ -62,8 +62,21 @@ typedef struct {
 } tty_t;
 
 
-extern uint32_t colors[];
-extern bool tty_initialized;
+static tty_t* current_tty = NULL;
+
+static uint32_t colors[16];
+
+static uint32_t currentBg;
+static uint32_t currentFg;
+
+static uint32_t x_cursor;
+static uint32_t y_cursor;
+
+static bool tty_initialized = false;
+
+static fb_info_t *current_fb = NULL;
+
+static tty_t ttys[4];
 
 void init_tty();
 void init_colors(uint32_t black, uint32_t red, uint32_t green, uint32_t yellow,
@@ -91,5 +104,8 @@ tty_t* get_current_tty();
 // Input handling
 void tty_input_char(tty_t* tty, char c);
 void tty_set_ldisc(tty_t* tty, int mode);
+
+long tty_read(file_t* file, void* buf, size_t len, uint64_t off);
+long tty_write(file_t* file, const void* data, size_t len, uint64_t off);
 
 #endif
