@@ -90,12 +90,7 @@ void init_serial_device(){
     serial_inode->ino = 5000;
     serial_inode->f_ops = &serial_file_ops;
     serial_inode->mode = 2;
-    dentry_t *d = (dentry_t *)kmalloc(sizeof(dentry_t));
-    memset(d, 0, sizeof(dentry_t));
-    strncpy(d->name, "sr0", 4);
-    d->name[NAME_MAX - 1] = '\0';
-    d->inode = serial_inode;
-    d->parent = root_sb->root;
-    d->next = root_sb->root->next;
-    root_sb->root->next = d;
+
+    vfs_register_device("/dev/sr0", serial_inode);
+    dbgln("Serial: Registered /dev/sr0\n\r");
 }

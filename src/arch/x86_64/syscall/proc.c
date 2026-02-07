@@ -3,6 +3,11 @@
 #include <kernel/vfs/vfs.h>
 #include <kernel/elf.h>
 #include <mm/vmm.h>
+#include <mm/pmm.h>
+#include <libk/utils.h>
+#include <libk/string.h>
+#include <arch/x86_64/regs.h>
+#include <stdint.h>
 
 int64_t sys_exit(uint64_t status, uint64_t arg2, uint64_t arg3,
                  uint64_t arg4, uint64_t arg5, uint64_t arg6) {

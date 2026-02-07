@@ -22,7 +22,7 @@ static void setup_task_stdio(task_t *t) {
         return;
     }
     
-    char tty_path[8] = "/tty";
+    char tty_path[16] = "/dev/tty";
     char id_str[2];
     itoa(tty->id, id_str, 10);
     strcat(tty_path, id_str);

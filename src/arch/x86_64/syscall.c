@@ -13,6 +13,9 @@
 
 extern void syscall_stub(void);
 
+syscall_handler_t syscall_handlers[MAX_SYSCALLS];
+register_t *current_syscall_regs = NULL;
+
 int64_t syscall_dispatch(register_t* regs) {
     uint64_t syscall_num = regs->rax;
     

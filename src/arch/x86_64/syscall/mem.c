@@ -1,6 +1,11 @@
 #include <kernel/sched/scheduler.h>
 #include <kernel/vfs/vfs.h>
 #include <mm/vmm.h>
+#include <mm/pmm.h>
+#include <arch/x86_64/syscall.h>
+#include <libk/utils.h>
+#include <stdint.h>
+#include <string.h>
 
 // mmap flags
 #define MAP_FAILED ((void*)-1)

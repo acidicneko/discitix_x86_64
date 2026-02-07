@@ -6,7 +6,7 @@ int main(int argc, char* argv[]) {
         print("Usage: dbgln <message>\n");
         return 1;
     }
-    int fd = open("/sr0", 1);
+    int fd = open("/dev/sr0", 1);
     if(fd < 0) {
         print("Failed to open serial device\n");
         return 1;

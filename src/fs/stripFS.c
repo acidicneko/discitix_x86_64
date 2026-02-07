@@ -30,7 +30,7 @@ long stripfs_file_read(file_t *f, void *buf, size_t len, uint64_t off) {
 inode_t *stripfs_dir_lookup(inode_t *parent, const char *name) {
     if (!parent || !parent->private) return NULL;
     dentry_t *parent_d = (dentry_t *)parent->private;
-    dentry_t *child = parent_d->next;
+    dentry_t *child = parent_d->children;
     while (child) {
         if (!strcmp(child->name, name)) {
             return child->inode;
@@ -115,8 +115,8 @@ int stripfs_create_and_mount() {
       d->inode = inode;
       d->parent = root;
 
-      d->next = root->next;
-      root->next = d;
+      d->next = root->children;
+      root->children = d;
 
       ptr += sizeof(strip_fs_file_t);
   }

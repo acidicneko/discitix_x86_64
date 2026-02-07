@@ -48,7 +48,8 @@ typedef struct dentry {
     char name[NAME_MAX];
     inode_t *inode;
     struct dentry *parent;
-    struct dentry *next;
+    struct dentry *next;      // sibling entries (files/dirs in same directory)
+    struct dentry *children;  // first child (for directories)
 } dentry_t;
 
 struct inode_operations {
@@ -98,5 +99,13 @@ int vfs_mount(superblock_t *sb, const char *mount_point);
 superblock_t *vfs_get_root_superblock();
 int vfs_lookup(inode_t *parent, const char *name, inode_t **result_inode);
 int vfs_lookup_path(const char *path, inode_t **result_inode);
+
+// Directory operations
+int vfs_mkdir(const char *path);
+int vfs_mkdir_at(inode_t *parent, const char *name);
+dentry_t *vfs_get_dentry(const char *path);
+
+// Device registration
+int vfs_register_device(const char *path, inode_t *device_inode);
 
 #endif /* __VFS_H__ */

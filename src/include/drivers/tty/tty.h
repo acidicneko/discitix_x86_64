@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <libk/spinlock.h>
+#include <drivers/framebuffer.h>
 
 #define TTY_MAX_BUF 256
 
@@ -62,21 +63,20 @@ typedef struct {
 } tty_t;
 
 
-static tty_t* current_tty = NULL;
+extern tty_t* current_tty;
 
-static uint32_t colors[16];
+extern uint32_t colors[16];
 
-static uint32_t currentBg;
-static uint32_t currentFg;
+extern uint32_t currentBg;
+extern uint32_t currentFg;
 
-static uint32_t x_cursor;
-static uint32_t y_cursor;
+extern uint32_t x_cursor;
+extern uint32_t y_cursor;
+extern bool tty_initialized;
 
-static bool tty_initialized = false;
+extern fb_info_t *current_fb;
 
-static fb_info_t *current_fb = NULL;
-
-static tty_t ttys[4];
+extern tty_t ttys[4];
 
 void init_tty();
 void init_colors(uint32_t black, uint32_t red, uint32_t green, uint32_t yellow,

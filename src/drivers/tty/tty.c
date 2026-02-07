@@ -12,6 +12,19 @@
 #include <kernel/vfs/vfs.h>
 #include <stdlib.h>
 
+tty_t* current_tty;
+
+uint32_t colors[16];
+
+uint32_t currentBg;
+uint32_t currentFg;
+
+uint32_t x_cursor;
+uint32_t y_cursor;
+bool tty_initialized;
+
+fb_info_t *current_fb;
+tty_t ttys[4];
 
 inode_t* tty_node = NULL;
 static file_operations_t tty_file_ops = {
@@ -28,7 +41,8 @@ void init_tty() {
   y_cursor = 0;
   current_fb = get_fb_info();
   load_embedded_psf2();
-  superblock_t* root_sb = vfs_get_root_superblock();
+  
+  
   for (int i = 0; i < TTY_NUM; ++i) {
     tty_node = (inode_t*)kmalloc(sizeof(inode_t));  
     memset(tty_node, 0, sizeof(inode_t));
@@ -41,21 +55,12 @@ void init_tty() {
     tty_node->f_ops = &tty_file_ops;
     tty_node->mode = 6;
     
-    dentry_t *d = (dentry_t *)kmalloc(sizeof(dentry_t));
-    memset(d, 0, sizeof(dentry_t));
-    
+    char path[16] = "/dev/tty";
     char id_str[2];
     itoa(i, id_str, 10);
-    char name[5] = "tty";
-    strcat(name, id_str);
-    strncpy(d->name, name, 5);
+    strcat(path, id_str);
     
-    d->name[NAME_MAX - 1] = '\0';
-    d->inode = tty_node;
-    d->parent = root_sb->root;
-    d->next = root_sb->root->next;
-    root_sb->root->next = d;
-    
+    vfs_register_device(path, tty_node);
     tty_node = NULL;
     
     ttys[i] = (tty_t) {
@@ -79,7 +84,7 @@ void init_tty() {
     memset(ttys[i].buffer, 0, sizeof(terminal_cell_t)*ttys[i].height*ttys[i].width);
   }
   current_tty = &ttys[0]; 
-  dbgln("TTYs registered - Defaulting to /tty0\n\r");
+  dbgln("TTYs registered at /dev/tty0-3\n\r");
   tty_initialized = true;
   // tty_paint_cursor(x_cursor, y_cursor);
 }

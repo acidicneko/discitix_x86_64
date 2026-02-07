@@ -1,8 +1,10 @@
 #include <arch/x86_64/syscall.h>
 #include <drivers/tty/tty.h>
 #include <kernel/sched/scheduler.h>
+#include <libk/utils.h>
+#include <libk/string.h>
 #include <kernel/vfs/vfs.h>
-
+#include <arch/x86_64/regs.h>
 
 struct user_stat {
     uint32_t st_ino;
@@ -21,6 +23,10 @@ struct user_stat {
 #define S_IFDIR  0040000
 #define S_IFREG  0100000
 #define S_IFCHR  0020000
+#define S_IFBLK  0060000
+#define S_IFLNK  0120000
+#define S_IFIFO  0010000
+#define S_IFSOCK 0140000
 
 struct linux_dirent64 {
     uint64_t d_ino;      // Inode number
@@ -149,13 +155,27 @@ int64_t sys_close(uint64_t fd, uint64_t arg2, uint64_t arg3,
 
 static void fill_stat_from_inode(struct user_stat *st, inode_t *inode) {
     st->st_ino = inode->ino;
-    st->st_mode = inode->mode;
-    // Set file type bits based on is_directory
-    if (inode->is_directory) {
-        st->st_mode |= S_IFDIR;
-    } else {
-        st->st_mode |= S_IFREG;
+    st->st_mode = inode->mode & 0777;  // Permission bits only
+    
+    // Set file type bits based on inode->type
+    switch (inode->type) {
+        case FT_DIR:  st->st_mode |= S_IFDIR;  break;
+        case FT_CHR:  st->st_mode |= S_IFCHR;  break;
+        case FT_BLK:  st->st_mode |= S_IFBLK;  break;
+        case FT_LNK:  st->st_mode |= S_IFLNK;  break;
+        case FT_FIFO: st->st_mode |= S_IFIFO;  break;
+        case FT_SOCK: st->st_mode |= S_IFSOCK; break;
+        case FT_REG:
+        default:
+            // Fall back to is_directory for legacy inodes without type set
+            if (inode->is_directory) {
+                st->st_mode |= S_IFDIR;
+            } else {
+                st->st_mode |= S_IFREG;
+            }
+            break;
     }
+    
     st->st_uid = inode->uid;
     st->st_gid = inode->gid;
     st->st_size = inode->size;
@@ -232,7 +252,7 @@ int64_t sys_getdents64(uint64_t fd, uint64_t buf_ptr, uint64_t count,
     size_t pos = 0;
     
     // Skip to the current offset (f->offset = number of entries already returned)
-    dentry_t *child = dir_dentry->next;
+    dentry_t *child = dir_dentry->children;
     uint64_t skip = f->offset;
     while (child && skip > 0) {
         child = child->next;

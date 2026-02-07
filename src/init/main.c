@@ -61,6 +61,7 @@ void init_kernel() {
   liballoc_init();
   init_vmm();
   init_initrd_stripFS();
+  vfs_mkdir("/dev");
   init_serial_device();
   init_syscalls();
 

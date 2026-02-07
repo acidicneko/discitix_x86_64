@@ -24,14 +24,15 @@
 
 #define MAX_SYSCALLS 32
 
-static syscall_handler_t syscall_handlers[MAX_SYSCALLS];
 
-static register_t *current_syscall_regs = NULL;
+extern register_t *current_syscall_regs;
 
 // Syscall handler function type
 typedef int64_t (*syscall_handler_t)(uint64_t arg1, uint64_t arg2, uint64_t arg3, 
                                       uint64_t arg4, uint64_t arg5, uint64_t arg6);
 
+
+extern syscall_handler_t syscall_handlers[MAX_SYSCALLS];
 
 void init_syscalls(void);
 
