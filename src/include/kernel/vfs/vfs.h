@@ -7,6 +7,16 @@
 #define NAME_MAX 255
 #define PATH_MAX 4096
 
+// File types (matches DT_* values used in dirent)
+#define FT_UNKNOWN  0
+#define FT_FIFO     1
+#define FT_CHR      2   // Character device (e.g., TTY)
+#define FT_DIR      4   // Directory
+#define FT_BLK      6   // Block device
+#define FT_REG      8   // Regular file
+#define FT_LNK      10  // Symbolic link
+#define FT_SOCK     12  // Socket
+
 typedef struct file file_t;
 typedef struct inode inode_t;
 typedef struct inode_operations inode_operations_t;
@@ -30,7 +40,8 @@ struct inode{
     file_operations_t *f_ops;
     void *private;
 
-    uint8_t is_directory;
+    uint8_t type;         // File type: FT_REG, FT_DIR, FT_CHR, etc.
+    uint8_t is_directory; // Legacy (kept for compatibility, use type == FT_DIR instead)
 };
 
 typedef struct dentry {
