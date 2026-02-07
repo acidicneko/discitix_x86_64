@@ -285,3 +285,27 @@ int64_t sys_getdents64(uint64_t fd, uint64_t buf_ptr, uint64_t count,
     
     return (int64_t)pos;
 }
+
+int64_t sys_chdir(uint64_t path_ptr, uint64_t arg2, uint64_t arg3,
+                  uint64_t arg4, uint64_t arg5, uint64_t arg6) {
+    (void)arg2; (void)arg3; (void)arg4; (void)arg5; (void)arg6;
+    
+    const char *path = (const char *)path_ptr;
+    if (!path) return -1;
+    
+    return vfs_chdir(path);
+}
+
+int64_t sys_getcwd(uint64_t buf_ptr, uint64_t size, uint64_t arg3,
+                   uint64_t arg4, uint64_t arg5, uint64_t arg6) {
+    (void)arg3; (void)arg4; (void)arg5; (void)arg6;
+    
+    char *buf = (char *)buf_ptr;
+    if (!buf || size == 0) return -1;
+    
+    if (vfs_getcwd(buf, size) != 0) {
+        return -1;
+    }
+    
+    return (int64_t)buf_ptr;  // Return pointer to buffer on success (like Linux)
+}

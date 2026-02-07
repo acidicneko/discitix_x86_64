@@ -285,8 +285,9 @@ int64_t sys_spawn(uint64_t path_ptr, uint64_t argv_ptr, uint64_t envp_ptr,
         return -1;
     }
     
-    // Set parent relationship
+    // Set parent relationship and inherit cwd
     child->parent_id = parent ? parent->id : 0;
+    child->cwd = parent ? parent->cwd : NULL;
     
     dbgln("sys_spawn: created child %d for '%s'\n\r", child->id, path);
     return child->id;

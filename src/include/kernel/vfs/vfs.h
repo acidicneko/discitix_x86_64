@@ -108,4 +108,9 @@ dentry_t *vfs_get_dentry(const char *path);
 // Device registration
 int vfs_register_device(const char *path, inode_t *device_inode);
 
+// Working directory operations
+int vfs_chdir(const char *path);
+int vfs_getcwd(char *buf, size_t size);
+dentry_t *vfs_get_root_dentry(void);
+
 #endif /* __VFS_H__ */

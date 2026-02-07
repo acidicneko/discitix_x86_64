@@ -1,4 +1,5 @@
 #include <kernel/vfs/vfs.h>
+#include <kernel/sched/scheduler.h>
 #include <libk/utils.h>
 #include <libk/string.h>
 #include <mm/pmm.h>
@@ -53,7 +54,21 @@ int vfs_lookup_path(const char *path, inode_t **result_inode) {
 		return -1;
 	}
 
-	inode_t *current_inode = root_superblock->root->inode;
+	// Determine starting point: absolute path starts from root, relative from cwd
+	dentry_t *current_dentry;
+	if (path[0] == '/') {
+		current_dentry = root_superblock->root;
+	} else {
+		// Get cwd from current task
+		task_t *task = get_current_task();
+		if (task && task->cwd) {
+			current_dentry = (dentry_t *)task->cwd;
+		} else {
+			current_dentry = root_superblock->root;
+		}
+	}
+
+	inode_t *current_inode = current_dentry->inode;
 
 	char path_copy[PATH_MAX];
 	strncpy(path_copy, path, PATH_MAX - 1);
@@ -65,9 +80,35 @@ int vfs_lookup_path(const char *path, inode_t **result_inode) {
 			return -1;
 		}
 
+		// Handle special entries
+		if (strcmp(token, ".") == 0) {
+			// Stay in current directory
+			token = strtok(NULL, "/");
+			continue;
+		} else if (strcmp(token, "..") == 0) {
+			// Go to parent directory
+			if (current_dentry->parent) {
+				current_dentry = current_dentry->parent;
+				current_inode = current_dentry->inode;
+			}
+			// If no parent, stay at root
+			token = strtok(NULL, "/");
+			continue;
+		}
+
 		inode_t *next_inode = NULL;
 		if (vfs_lookup(current_inode, token, &next_inode) != 0) {
 			return -1;
+		}
+
+		// Update current_dentry to match
+		dentry_t *child = current_dentry->children;
+		while (child) {
+			if (!strcmp(child->name, token)) {
+				current_dentry = child;
+				break;
+			}
+			child = child->next;
 		}
 
 		current_inode = next_inode;
@@ -116,7 +157,18 @@ dentry_t *vfs_get_dentry(const char *path) {
 		return root_superblock->root;
 	}
 
-	dentry_t *current = root_superblock->root;
+	// Determine starting point
+	dentry_t *current;
+	if (path[0] == '/') {
+		current = root_superblock->root;
+	} else {
+		task_t *task = get_current_task();
+		if (task && task->cwd) {
+			current = (dentry_t *)task->cwd;
+		} else {
+			current = root_superblock->root;
+		}
+	}
 
 	char path_copy[PATH_MAX];
 	strncpy(path_copy, path, PATH_MAX - 1);
@@ -126,6 +178,18 @@ dentry_t *vfs_get_dentry(const char *path) {
 	while (token) {
 		if (!current->inode || !current->inode->is_directory) {
 			return NULL;
+		}
+
+		// Handle . and ..
+		if (strcmp(token, ".") == 0) {
+			token = strtok(NULL, "/");
+			continue;
+		} else if (strcmp(token, "..") == 0) {
+			if (current->parent) {
+				current = current->parent;
+			}
+			token = strtok(NULL, "/");
+			continue;
 		}
 
 		// Search in children
@@ -299,5 +363,82 @@ int vfs_register_device(const char *path, inode_t *device_inode) {
 	parent_dentry->children = new_dentry;
 
 	dbgln("VFS: registered device '%s' at '%s'\n\r", dev_name, path);
+	return 0;
+}
+
+// Get root dentry
+dentry_t *vfs_get_root_dentry(void) {
+	if (!root_superblock || !root_superblock->root) {
+		return NULL;
+	}
+	return root_superblock->root;
+}
+
+// Change current working directory
+int vfs_chdir(const char *path) {
+	if (!path) return -1;
+
+	task_t *task = get_current_task();
+	if (!task) return -1;
+
+	// Look up the path
+	inode_t *inode = NULL;
+	if (vfs_lookup_path(path, &inode) != 0 || !inode) {
+		return -1;
+	}
+
+	// Must be a directory
+	if (!inode->is_directory) {
+		return -1;
+	}
+
+	// Get the dentry for this path
+	dentry_t *dentry = vfs_get_dentry(path);
+	if (!dentry) {
+		return -1;
+	}
+
+	task->cwd = (void *)dentry;
+	return 0;
+}
+
+// Get current working directory path
+int vfs_getcwd(char *buf, size_t size) {
+	if (!buf || size == 0) return -1;
+
+	task_t *task = get_current_task();
+	dentry_t *cwd;
+	
+	if (task && task->cwd) {
+		cwd = (dentry_t *)task->cwd;
+	} else {
+		cwd = root_superblock->root;
+	}
+
+	// Build path by walking up to root
+	char tmp[PATH_MAX];
+	int pos = PATH_MAX - 1;
+	tmp[pos] = '\0';
+
+	dentry_t *d = cwd;
+	while (d && d->parent) {
+		int name_len = strlen(d->name);
+		pos -= name_len;
+		if (pos < 1) return -1;  // Path too long
+		memcpy((uint8_t*)&tmp[pos], (uint8_t*)d->name, name_len);
+		pos--;
+		tmp[pos] = '/';
+		d = d->parent;
+	}
+
+	// If we're at root
+	if (pos == PATH_MAX - 1) {
+		tmp[--pos] = '/';
+	}
+
+	int len = PATH_MAX - pos;
+	if ((size_t)len > size) return -1;
+
+	memcpy((uint8_t*)buf, (uint8_t*)&tmp[pos], len);
 	return 0;
 }

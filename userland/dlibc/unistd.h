@@ -76,4 +76,18 @@ static inline void *sbrk(long increment) {
     return current;  // Return old break
 }
 
+// chdir - change current working directory
+// Returns: 0 on success, -1 on error
+static inline int chdir(const char *path) {
+    return (int)syscall1(SYS_CHDIR, (long)path);
+}
+
+// getcwd - get current working directory
+// Returns: pointer to buf on success, NULL on error
+static inline char *getcwd(char *buf, unsigned long size) {
+    long ret = syscall2(SYS_GETCWD, (long)buf, (long)size);
+    if (ret == -1) return (char*)0;
+    return buf;
+}
+
 #endif

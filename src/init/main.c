@@ -127,7 +127,7 @@ void kmain() {
   init_kernel();
   sysfetch();
 
-  task_t* elf_task = run_elf_from_initrd("sh");
+  task_t* elf_task = run_elf_from_initrd("authy");
   if (elf_task) {
       dbgln("Created ELF task id=%d from initrd\n\r", elf_task->id);
   } else {

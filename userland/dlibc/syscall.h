@@ -17,6 +17,8 @@
 #define SYS_GETDENTS64 12
 #define SYS_STAT    13
 #define SYS_FSTAT   14
+#define SYS_CHDIR   15
+#define SYS_GETCWD  16
 
 static inline long syscall0(long num) {
     long ret;

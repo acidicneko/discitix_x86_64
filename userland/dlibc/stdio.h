@@ -4,6 +4,8 @@
 #include "syscall.h"
 #include "fcntl.h"
 
+#include <stddef.h>
+
 #define STDIN  0
 #define STDOUT 1
 #define STDERR 2
@@ -29,6 +31,14 @@ static inline long strcmp(const char *s1, const char *s2) {
         s2++;
     }
     return *(unsigned char *)s1 - *(unsigned char *)s2;
+}
+
+static inline long memset(void *s, int c, size_t n) {
+    unsigned char *p = (unsigned char *)s;
+    for (size_t i = 0; i < n; i++) {
+        p[i] = (unsigned char)c;
+    }
+    return (long)s;
 }
 
 static inline void print(const char *msg) {

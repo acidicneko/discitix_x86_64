@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stddef.h>
 
 // Simple argument parser - splits command line by spaces
 // Returns argc, fills argv array (must have room for at least max_args)
@@ -32,9 +33,15 @@ static int parse_args(char *cmdline, char **argv, int max_args) {
 int main(int argc, char** argv){
     (void)argc; (void)argv;
     char buffer[128];
+    char cwd[128];
     print("Simple Shell (type 'exit' to quit)\n");
     while (1){
-        print(">> ");
+        print("\033[1;32m");
+        getcwd(cwd, sizeof(cwd));
+        if (cwd[0]) {
+            print(cwd);
+        }
+        print(" $ \033[0m");
         if (!gets(buffer, sizeof(buffer))){
             break;
         }
@@ -52,13 +59,24 @@ int main(int argc, char** argv){
         } else if(strcmp(buffer, "clear") == 0){
             print("\033[2J\033[H");
             continue;
-        }
+        } 
         
         // Parse command line into arguments
         char *args[16];
         int nargs = parse_args(buffer, args, 16);
         
         if (nargs == 0) {
+            continue;
+        }
+        
+        // Handle cd builtin (after parsing to get args)
+        if (strcmp(args[0], "cd") == 0) {
+            const char *target = (nargs >= 2) ? args[1] : "/";
+            if (chdir(target) != 0) {
+                print("cd: no such directory: ");
+                print(target);
+                print("\n");
+            }
             continue;
         }
         

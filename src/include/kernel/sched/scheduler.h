@@ -44,6 +44,9 @@ typedef struct task {
     
     // File descriptor table (fd 0=stdin, 1=stdout, 2=stderr)
     struct file *fd_table[MAX_FDS];
+    
+    // Current working directory
+    void *cwd;  // dentry_t* - current working directory
 } task_t;
 
 void init_scheduler();

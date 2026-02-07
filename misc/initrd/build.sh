@@ -14,6 +14,7 @@ FILES=(
     userland/build/ls ls 
     userland/build/dbgln dbgln
     userland/build/echo echo
+    userland/build/authy authy
 )
 
 stripFS/build/stripctl $IMAGE_PATH "${FILES[@]}"

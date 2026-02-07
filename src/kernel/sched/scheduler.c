@@ -617,6 +617,7 @@ task_t *fork_current_task(register_t *parent_regs) {
     child->user_code = parent->user_code;  // Share code pages (read-only)
     child->user_stack = user_stack;
     child->user_code_pages = parent->user_code_pages;
+    child->cwd = parent->cwd;  // Inherit current working directory
     
     // Copy register state from parent
     memcpy((uint8_t*)&child->regs, (const uint8_t*)parent_regs, sizeof(register_t));

@@ -20,6 +20,8 @@
 #define SYS_GETDENTS64  12
 #define SYS_STAT        13
 #define SYS_FSTAT       14
+#define SYS_CHDIR       15
+#define SYS_GETCWD      16
 
 
 #define MAX_SYSCALLS 32
@@ -77,5 +79,9 @@ int64_t sys_stat(uint64_t path_ptr, uint64_t buf_ptr, uint64_t arg3,
                  uint64_t arg4, uint64_t arg5, uint64_t arg6);
 int64_t sys_fstat(uint64_t fd, uint64_t buf_ptr, uint64_t arg3,
                   uint64_t arg4, uint64_t arg5, uint64_t arg6);
+int64_t sys_chdir(uint64_t path_ptr, uint64_t arg2, uint64_t arg3,
+                  uint64_t arg4, uint64_t arg5, uint64_t arg6);
+int64_t sys_getcwd(uint64_t buf_ptr, uint64_t size, uint64_t arg3,
+                   uint64_t arg4, uint64_t arg5, uint64_t arg6);
 
 #endif
