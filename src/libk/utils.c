@@ -9,7 +9,7 @@ void sysfetch() {
   /* ASCII art + info */
   printf("\033[34m '---' \t\033[1;37mKernel: \033[0mDiscitix\n");
   printf("\033[34m (O,O) \t\033[1;37mBuild:  \033[0m%s\n", __DATE__);
-  printf("\033[34m /)_)\t\033[1;37mMemory: \033[0m%lu/%lu MB\n",
+  printf("\033[34m /)_)\t\033[1;37mMemory: \033[0m%ul/%ul MB\n",
          get_free_physical_memory() / 1024 / 1024,
          get_total_physical_memory() / 1024 / 1024);
   printf("\033[34m  \"\"  \n\033[0m\n");

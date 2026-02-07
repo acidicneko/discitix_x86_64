@@ -182,6 +182,7 @@ int vfs_mkdir_at(inode_t *parent, const char *name) {
 	new_inode->i_ops = &vfs_dir_iops;
 	new_inode->f_ops = NULL;
 	new_inode->private = (void *)new_dentry;
+	new_inode->mode = 5;
 
 	new_dentry->inode = new_inode;
 

@@ -18,6 +18,7 @@ typedef struct {
   char filename[256];
   int length;
   int offset;
+  int executable;
 } strip_fs_file_t;
 
 void init_initrd_stripFS();
