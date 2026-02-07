@@ -47,22 +47,25 @@ void init_gdt(){
     // Entry 1: Kernel Code (0x08) - DPL 0
     // Access: Present(1) | DPL(00) | Type(1) | Executable(1) | Conforming(0) | Readable(1) | Accessed(0)
     // = 0x9A
-    // Flags: Granularity(0) | Long mode(1) | Size(0) | reserved(0) = 0xA0
+    // Flags: Granularity(1) | D/B(0) | Long mode(1) | AVL(0) = 0xA0
     gdt_set_entry(1, 0, 0xFFFFF, 0x9A, 0xA0);
     
     // Entry 2: Kernel Data (0x10) - DPL 0
     // Access: Present(1) | DPL(00) | Type(1) | Executable(0) | Direction(0) | Writable(1) | Accessed(0)
     // = 0x92
-    gdt_set_entry(2, 0, 0xFFFFF, 0x92, 0xA0);
+    // Flags for data segment in 64-bit mode: G(1) | D/B(0) | L(0) | AVL(0) = 0x80
+    gdt_set_entry(2, 0, 0xFFFFF, 0x92, 0x80);
     
     // Entry 3: User Data (0x18) - DPL 3
     // Access: Present(1) | DPL(11) | Type(1) | Executable(0) | Direction(0) | Writable(1) | Accessed(0)
     // = 0xF2
-    gdt_set_entry(3, 0, 0xFFFFF, 0xF2, 0xA0);
+    // Flags: G(1) | D/B(0) | L(0) | AVL(0) = 0x80
+    gdt_set_entry(3, 0, 0xFFFFF, 0xF2, 0x80);
     
     // Entry 4: User Code (0x20) - DPL 3
     // Access: Present(1) | DPL(11) | Type(1) | Executable(1) | Conforming(0) | Readable(1) | Accessed(0)
     // = 0xFA
+    // Flags: G(1) | D/B(0) | Long mode(1) | AVL(0) = 0xA0
     gdt_set_entry(4, 0, 0xFFFFF, 0xFA, 0xA0);
     
     // Entry 5-6: TSS (0x28) - spans 2 entries in long mode

@@ -75,11 +75,12 @@ void init_irq(){
     dbgln("IRQs initialised\n\r");
 }
 
-void irq_handler(register_t* regs){
+register_t* irq_handler(register_t* regs){
     void (*handler)(register_t* regs);
     handler = interrupt_handlers[regs->int_no - 32];
     if(handler){
         handler(regs);
     }
     send_eoi(regs->int_no);
+    return regs;  // Return regs pointer for context switch support
 }

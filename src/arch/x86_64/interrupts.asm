@@ -77,6 +77,7 @@ irq_common_stub:
     save_regs
     mov rdi, rsp
     call irq_handler
+    mov rsp, rax          ; Support context switch - use returned rsp
     restore_regs
     add rsp, 16
     iretq
