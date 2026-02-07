@@ -1,0 +1,9 @@
+-Idlibc
+-nostdlib
+-nostartfiles
+-static
+-fno-pic
+-no-pie
+-ffreestanding
+-mno-red-zone
+

@@ -3,3 +3,4 @@
 build/image.hdd
 build/kernel.elf
 misc/initrd/initrd.img
+userland/build/*

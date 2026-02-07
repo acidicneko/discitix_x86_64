@@ -23,16 +23,19 @@ LDINTERNALFLAGS :=  \
 CFILES = $(shell find src/ -type f -name '*.c')
 ASMFILES = $(shell find src/ -type f -name '*.asm')
 OFILES = $(CFILES:.c=.o) $(ASMFILES:.asm=.o)
-INITRD_FILES = shell.nix shell.nix .gitmodules .gitmodules compile_flags.txt compile_flags.txt misc/default.psf font.psf
-
 TARGET = build/kernel.elf
 IMAGE = build/image.hdd
 
-.PHONY: clean all setup
+.PHONY: clean all setup userland
 
-$(IMAGE): $(TARGET)
+# Build userland programs first
+userland:
+	@echo "[USERLAND]"
+	@$(MAKE) -C userland
+
+$(IMAGE): $(TARGET) userland
 	@echo "[STRIPCTL]"
-	@./stripFS/build/stripctl misc/initrd/initrd.img $(INITRD_FILES)
+	@./misc/initrd/build.sh
 	@echo [CREATE IMAGE]
 	@dd if=/dev/zero of=$(IMAGE) bs=1M count=64
 	@parted -s $(IMAGE) mklabel msdos
@@ -64,7 +67,8 @@ $(TARGET): $(OFILES)
 
 clean:
 	@echo [CLEAN] 
-	@rm $(OFILES) $(TARGET) $(IMAGE)
+	@rm -f $(OFILES) $(TARGET) $(IMAGE)
+	@$(MAKE) -C userland clean
 
 run:
 	@echo [RUN] $(IMAGE)
