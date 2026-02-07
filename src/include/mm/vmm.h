@@ -21,4 +21,21 @@ int vmm_map_page(void *virt, void *phys, uint64_t flags);
 // Map a contiguous range of pages
 int vmm_map_range(void *virt, void *phys, size_t pages, uint64_t flags);
 
+// Per-process page table support
+// Create a new page table that shares kernel mappings (higher half)
+// Returns physical address of new PML4, or 0 on failure
+uint64_t vmm_create_user_page_table(void);
+
+// Map a page in a specific page table (given by cr3 physical address)
+int vmm_map_page_in(uint64_t cr3_phys, void *virt, void *phys, uint64_t flags);
+
+// Switch to a different page table
+void vmm_switch_page_table(uint64_t cr3_phys);
+
+// Get current CR3
+uint64_t vmm_get_cr3(void);
+
+// Free a user page table (frees only user-space entries, not kernel)
+void vmm_free_user_page_table(uint64_t cr3_phys);
+
 #endif
