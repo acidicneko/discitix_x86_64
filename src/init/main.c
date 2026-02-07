@@ -33,6 +33,7 @@ SOFTWARE. */
 #include <drivers/tty/tty.h>
 #include <fs/stripFS.h>
 #include <init/stivale2.h>
+#include <kernel/elf.h>
 #include <kernel/sched/scheduler.h>
 #include <libk/shell.h>
 #include <libk/stdio.h>
@@ -60,6 +61,7 @@ void init_kernel() {
   liballoc_init();
   init_vmm();
   init_initrd_stripFS();
+  init_serial_device();
   init_syscalls();
 
   init_tty();
@@ -76,53 +78,59 @@ void init_kernel() {
   print_font_details();
 }
 
-// Simple usermode test program (raw machine code)
-// This writes "Hello from Ring 3!\n" to stdout and then exits
-// Byte layout:
-//   0-6:   mov rax, 2        (7 bytes)
-//   7-13:  mov rdi, 1        (7 bytes)
-//   14-20: lea rsi, [rip+25] (7 bytes) - RIP after = 21, msg at 46, offset = 46-21 = 25
-//   21-27: mov rdx, 19       (7 bytes)
-//   28-29: int 0x80          (2 bytes)
-//   30-36: mov rax, 0        (7 bytes)
-//   37-43: mov rdi, 0        (7 bytes)
-//   44-45: int 0x80          (2 bytes)
-//   46+:   "Hello from Ring 3!\n"
-static uint8_t user_program[] = {
-    // mov rax, 2 (SYS_WRITE)
-    0x48, 0xc7, 0xc0, 0x02, 0x00, 0x00, 0x00,
-    // mov rdi, 1 (stdout)
-    0x48, 0xc7, 0xc7, 0x01, 0x00, 0x00, 0x00,
-    // lea rsi, [rip + 25] (0x19) - message offset
-    0x48, 0x8d, 0x35, 0x19, 0x00, 0x00, 0x00,
-    // mov rdx, 19 (length)
-    0x48, 0xc7, 0xc2, 0x13, 0x00, 0x00, 0x00,
-    // int 0x80
-    0xcd, 0x80,
-    // mov rax, 0 (SYS_EXIT)
-    0x48, 0xc7, 0xc0, 0x00, 0x00, 0x00, 0x00,
-    // mov rdi, 0 (exit code)
-    0x48, 0xc7, 0xc7, 0x00, 0x00, 0x00, 0x00,
-    // int 0x80
-    0xcd, 0x80,
-    // Message: "Hello from Ring 3!\n"
-    'H', 'e', 'l', 'l', 'o', ' ', 'f', 'r', 'o', 'm', ' ',
-    'R', 'i', 'n', 'g', ' ', '3', '!', '\n'
-};
+task_t* run_elf_from_initrd(const char* filename) {
+    inode_t* inode = NULL;
+    file_t* file = NULL;
+    
+    char path[256];
+    path[0] = '/';
+    strncpy(path + 1, filename, sizeof(path) - 2);
+    
+    if (vfs_lookup_path(path, &inode) != 0 || !inode) {
+        dbgln("ELF: File not found: %s\n\r", path);
+        return NULL;
+    }
+    
+    if (vfs_open(&file, inode, 0) != 0 || !file) {
+        dbgln("ELF: Failed to open: %s\n\r", path);
+        return NULL;
+    }
+    
+    size_t file_size = inode->size;
+    void* buffer = pmalloc((file_size + 4095) / 4096);
+    if (!buffer) {
+        dbgln("ELF: Failed to allocate buffer for %d bytes\n\r", (int)file_size);
+        vfs_close(file);
+        return NULL;
+    }
+  
+    size_t bytes_read = vfs_read(file, buffer, file_size);
+    vfs_close(file);
+    
+    if (bytes_read != file_size) {
+        dbgln("ELF: Read failed, got %d of %d bytes\n\r", (int)bytes_read, (int)file_size);
+        pmm_free_pages(buffer, (file_size + 4095) / 4096);
+        return NULL;
+    }
+    
+    dbgln("ELF: Loaded %s (%d bytes)\n\r", filename, (int)file_size);
+    
+    task_t* task = create_elf_task(buffer, file_size, 2);
+    
+    pmm_free_pages(buffer, (file_size + 4095) / 4096);
+    
+    return task;
+}
 
 void kmain() {
   init_kernel();
   sysfetch();
 
-  // Create shell task (kernel mode) first
-  create_task((void *)init_shell, (void *)NULL, 2);
-
-  // Create a usermode task via the scheduler
-  task_t *user_task = create_user_task(user_program, sizeof(user_program), 2);
-  if (user_task) {
-      dbgln("Created usermode task id=%d\n\r", user_task->id);
+  task_t* elf_task = run_elf_from_initrd("sh");
+  if (elf_task) {
+      dbgln("Created ELF task id=%d from initrd\n\r", elf_task->id);
   } else {
-      dbgln("Failed to create usermode task\n\r");
+      dbgln("No ELF program in initrd (or load failed)\n\r");
   }
 
   for (;;) {
