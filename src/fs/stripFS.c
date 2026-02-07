@@ -72,6 +72,7 @@ int stripfs_create_and_mount() {
   if (!root_inode) return -1;
   memset(root_inode, 0, 4096);
   root_inode->is_directory = 1;
+  root_inode->type = FT_DIR;
   root_inode->i_ops = &stripfs_dir_iops;
   root_inode->f_ops = NULL;
   root_inode->private = (void *)root;
@@ -97,6 +98,7 @@ int stripfs_create_and_mount() {
       inode->ino = ino_counter++;
       inode->size = (uint32_t)filemeta->length;
       inode->is_directory = 0;
+      inode->type = FT_REG;
       inode->f_ops = &stripfs_fops;
       inode->i_ops = NULL;
       inode->private = (void *)filemeta; /* store meta pointer */
