@@ -2,6 +2,12 @@
 #include <stdio.h>
 #include <sys/stat.h>
 
+/* ANSI colors */
+#define CLR_RESET "\033[0m"
+#define CLR_BLUE  "\033[34m"
+#define CLR_GREEN "\033[32m"
+#define CLR_CYAN  "\033[36m"
+
 static void printc(char c) {
     char s[2] = { c, 0 };
     print(s);
@@ -47,6 +53,18 @@ static void print_num_width(unsigned int n, int width) {
         printc(buf[i]);
 }
 
+static void print_name_colored(const char *name, mode_t mode) {
+    if (S_ISDIR(mode))
+        print(CLR_BLUE);
+    else if (S_ISLNK(mode))
+        print(CLR_CYAN);
+    else if (mode & S_IXOTH)
+        print(CLR_GREEN);
+
+    print(name);
+    print(CLR_RESET);
+}
+
 int main(int argc, char *argv[]) {
     const char *path = (argc >= 2) ? argv[1] : ".";
 
@@ -62,14 +80,14 @@ int main(int argc, char *argv[]) {
         char full[512];
         int i = 0;
 
-        // base path
+        /* base path */
         for (; path[i] && i < 500; i++)
             full[i] = path[i];
 
         if (i && full[i - 1] != '/')
             full[i++] = '/';
 
-        // name
+        /* filename */
         for (int j = 0; de->d_name[j] && i < 510; j++)
             full[i++] = de->d_name[j];
 
@@ -83,7 +101,7 @@ int main(int argc, char *argv[]) {
         print("  ");
         print_num_width(st.st_size, 8);
         print("  ");
-        print(de->d_name);
+        print_name_colored(de->d_name, st.st_mode);
         print("\n");
     }
 
