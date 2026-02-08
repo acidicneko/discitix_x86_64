@@ -10,7 +10,7 @@ Join Discitix's own [Discord Server](https://discord.gg/6a9C3r2fGU)
 
 ## Discitix in action
 
-![Settings Window](https://raw.githubusercontent.com/acidicneko/discitix_x86_64/main/images/kernel.png)
+![Settings Window](https://raw.githubusercontent.com/acidicneko/discitix_x86_64/main/images/8_2_2026.png)
 
 ## Building
 
@@ -19,15 +19,27 @@ Clone this repo with -
 git clone --recurse-submodules https://github.com/acidicneko/discitix_x86_64.git
 ```
 
-### Using Nix shell configuration
+### Choosing your Build Environment
+#### 1. Using Nix shell configuration
 You can use the Nix shell configuration to build the kernel.
 
 Enter the nix shell with the following command:
 ```bash
 nix-shell
 ```
+#### 2. Natively on system
+Install these dependencies via your package manager.
+- QEMU
+- GNU Make
+- GCC 10+
+- NASM
+- Parted
 
+All the commands below applies to both the environments.
+#### Build process
 Run the following command the first time to set up the environment:
+
+##### With Make
 ```bash
 make setup
 ```
@@ -41,20 +53,21 @@ To run the kernel, use:
 make run
 ```
 
-### Natively on system
-Please install libuuid, libfuse and pkgconfig for echFS utils.
-Install these too:
-- QEMU
-- GNU Make
-- GCC 10+
-- NASM
-- Parted
+##### With Karui
+Alternatively you can use `karui` build tool.
 
-After installing all prerequsites, if you are building for first time, run `make setup` as root.
-
-To build the kernel do `make` in project's root.
-
-After building the kernel, run it with, `make run`
+Setup the build environment
+```bash
+karui -r setup
+```
+To build the kernel:
+```bash
+karui 
+```
+Run the kernel with 
+```bash
+karui -r run
+```
 
 ### Features
 - [x] Port to x86_64
@@ -67,7 +80,7 @@ After building the kernel, run it with, `make run`
 - [ ] Heap memory
 - [x] VFS
 - [ ] HDD driver
-- [ ] echFS
-- [ ] Syscalls
-- [ ] ELF execution
+- [x] Syscalls
+- [x] ELF execution
 - [x] Process Management
+- [x] Basic userland

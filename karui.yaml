@@ -59,6 +59,10 @@ hooks:
       - make -C userland clean
       - make -C userland
 
+  - name: setup
+    commands:
+      - make -C limine
+      - make -C stripFS
 
 workflow:
   - asm
