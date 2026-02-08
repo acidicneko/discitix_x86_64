@@ -1,0 +1,69 @@
+cc: gcc
+target: kernel.elf
+threads: 12
+buildDir: build
+srcDir: src
+verbose: false
+
+
+flags:
+  - -Wall
+  - -Wextra
+  - -O2
+  - -pipe
+  - -g
+  - -I src/include
+  - -ffreestanding
+  - -mno-red-zone
+  - -fno-pic
+  - -fno-pie
+  - -fno-stack-protector
+  - -mgeneral-regs-only
+  - -fno-exceptions
+  - -mcmodel=kernel
+
+ldflags:
+  - -T misc/linker.ld
+  - -ffreestanding
+  - -nostdlib
+  - -nodefaultlibs
+  - -z max-page-size=0x1000
+  - -z noexecstack
+  - -Wl,--build-id=none
+  - -no-pie
+
+extraObjs:
+  - build/gdt_asm.o
+  - build/interrupts.o
+
+hooks:
+  - name: asm
+    commands: 
+      - nasm -f elf64 -o build/gdt_asm.o src/arch/x86_64/gdt_asm.asm
+      - nasm -f elf64 -o build/interrupts.o src/arch/x86_64/interrupts.asm
+  
+  - name: build-initrd
+    commands:
+      - ./misc/initrd/build.sh
+
+  - name: image
+    commands: 
+      - ./misc/build-image.sh
+
+  - name: run
+    commands: 
+      - qemu-system-x86_64 -drive format=raw,file=build/image.hdd -m 128M -serial stdio
+
+  - name: build-userland
+    commands:
+      - make -C userland clean
+      - make -C userland
+
+
+workflow:
+  - asm
+  - build-userland
+  - build-initrd
+  - build
+  - link
+  - image
