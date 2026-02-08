@@ -28,6 +28,7 @@ SOFTWARE. */
 #include <arch/x86_64/syscall.h>
 #include <drivers/keyboard.h>
 #include <drivers/pit.h>
+#include <drivers/rtc.h>
 #include <drivers/serial.h>
 #include <drivers/tty/psf2.h>
 #include <drivers/tty/tty.h>
@@ -56,6 +57,7 @@ void init_kernel() {
   keyboard_install();
   init_scheduler();
   pit_install(100);
+  rtc_init();
   IRQ_START;
   init_pmm();
   liballoc_init();
@@ -67,14 +69,32 @@ void init_kernel() {
 
   init_tty();
   if (arg_exist("gruvbox")) {
-    init_colors(0x282828, 0xcc241d, 0x98971a, 0xd79921, 0x458588, 0xb16286,
-                0x689d6a, 0xa89984, 0x928374, 0xfb4934, 0xb8bb26, 0xfabd2f,
-                0x83a598, 0xd8369b, 0x8ec07c, 0xebdbb2);
+    init_colors(
+    0x000000,  // black
+    0xaa0000,  // red
+    0x00aa00,  // green
+    0xaa5500,  // yellow (brown)
+    0x0000aa,  // blue
+    0xaa00aa,  // magenta
+    0x00aaaa,  // cyan
+    0xaaaaaa,  // light gray
+
+    0x555555,  // dark gray
+    0xff5555,  // bright red
+    0x55ff55,  // bright green
+    0xffff55,  // bright yellow
+    0x5555ff,  // bright blue
+    0xff55ff,  // bright magenta
+    0x55ffff,  // bright cyan
+    0xffffff   // white
+);
+
   } else {
     init_colors(0x2E3440, 0x3B4252, 0x434C5E, 0x4C566A, 0xD8DEE9, 0xE5E9F0,
                 0xECEFF4, 0x8FBCBB, 0x88C0D0, 0x81A1C1, 0x5E81AC, 0xBF616A,
                 0xD08770, 0xEBCB8B, 0xA3BE8C, 0xB48EAD);
   }
+  printf("UNIX Epoch: %ul\n\r", get_unix_epoch());
   dbgln("Kernel initialised successfully!\n\r");
   print_font_details();
 }
