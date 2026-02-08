@@ -54,7 +54,7 @@ make run
 ```
 
 ##### With Karui
-Alternatively you can use `karui` build tool.
+Alternatively you can use [Karui](https://github.com/acidicneko/karui) build tool.
 
 Setup the build environment
 ```bash
