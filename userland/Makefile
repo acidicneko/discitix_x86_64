@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Idlibc -nostdlib -nostartfiles -static -fno-pic -no-pie -ffreestanding -mno-red-zone
-LDFLAGS = -T linker.ld -nostdlib -static
+LDFLAGS = -T linker.ld -nostdlib -static -Wl,--build-id=none
 
 # Output directory for binaries
 BUILD = build
@@ -20,11 +20,10 @@ $(BUILD):
 
 # Build each app from its directory + crt.c
 $(BUILD)/%: %/main.c $(CRT) linker.ld
-	@echo "[BUILD] $@"
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(CRT) $<
-	@file $@
+	@echo "[USERLAND] $@"
+	@$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(CRT) $<
 
 clean:
-	rm -rf $(BUILD)
+	@rm -rf $(BUILD)
 
 .PHONY: all clean
