@@ -5,7 +5,7 @@
 #include <libk/stdio.h>
 #include <libk/string.h>
 #include <libk/utils.h>
-#include <mm/pmm.h>
+#include <mm/liballoc.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <sys/types.h>
@@ -58,19 +58,19 @@ static inode_operations_t stripfs_dir_iops = {
 int stripfs_create_and_mount() {
   if (!header_strip) return -1;
 
-  superblock_t *sb = (superblock_t *)pmalloc(1);
+  superblock_t *sb = (superblock_t *)kmalloc(sizeof(superblock_t));
   if (!sb) return -1;
-  memset(sb, 0, 4096);
+  memset(sb, 0, sizeof(superblock_t));
   strncpy(sb->fs_type, "stripfs", sizeof(sb->fs_type) - 1);
 
-  dentry_t *root = (dentry_t *)pmalloc(1);
+  dentry_t *root = (dentry_t *)kmalloc(sizeof(dentry_t));
   if (!root) return -1;
-  memset(root, 0, 4096);
+  memset(root, 0, sizeof(dentry_t));
   strcpy(root->name, "/");
 
-  inode_t *root_inode = (inode_t *)pmalloc(1);
+  inode_t *root_inode = (inode_t *)kmalloc(sizeof(inode_t));
   if (!root_inode) return -1;
-  memset(root_inode, 0, 4096);
+  memset(root_inode, 0, sizeof(inode_t));
   root_inode->is_directory = 1;
   root_inode->type = FT_DIR;
   root_inode->i_ops = &stripfs_dir_iops;
@@ -83,18 +83,18 @@ int stripfs_create_and_mount() {
   uint8_t *ptr = (uint8_t *)(initrd_location_strip + sizeof(strip_fs_header_t));
   uint32_t ino_counter = 1;
   for (int i = 0; i < header_strip->num_files; i++) {
-      strip_fs_file_t *filemeta = (strip_fs_file_t *)pmalloc(1);
+      strip_fs_file_t *filemeta = (strip_fs_file_t *)kmalloc(sizeof(strip_fs_file_t));
       if (!filemeta) continue;
       memcpy((uint8_t *)filemeta, ptr, sizeof(strip_fs_file_t));
 
       /* create inode */
-      inode_t *inode = (inode_t *)pmalloc(1);
+      inode_t *inode = (inode_t *)kmalloc(sizeof(inode_t));
       if (!inode) {
-          pmm_free_pages(filemeta, 1);
+          kfree(filemeta);
           ptr += sizeof(strip_fs_file_t);
           continue;
       }
-      memset(inode, 0, 4096);
+      memset(inode, 0, sizeof(inode_t));
       inode->ino = ino_counter++;
       inode->size = (uint32_t)filemeta->length;
       inode->is_directory = 0;
@@ -107,14 +107,14 @@ int stripfs_create_and_mount() {
       } else {
           inode->mode = 4;
       }
-      dentry_t *d = (dentry_t *)pmalloc(1);
+      dentry_t *d = (dentry_t *)kmalloc(sizeof(dentry_t));
       if (!d) {
-          pmm_free_pages(inode, 1);
-          pmm_free_pages(filemeta, 1);
+          kfree(inode);
+          kfree(filemeta);
           ptr += sizeof(strip_fs_file_t);
           continue;
       }
-      memset(d, 0, 4096);
+      memset(d, 0, sizeof(dentry_t));
       strncpy(d->name, filemeta->filename, NAME_MAX - 1);
       d->inode = inode;
       d->parent = root;
