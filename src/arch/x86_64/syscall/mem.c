@@ -6,137 +6,258 @@
 #include <libk/utils.h>
 #include <stdint.h>
 #include <string.h>
+#define EPERM    1
+#define ENOENT   2
+#define ESRCH    3
+#define ENOMEM  12
+#define EINVAL  22
+#define ENOSYS  38
+/* mmap protection flags */
+#define PROT_NONE   0x0
+#define PROT_READ   0x1
+#define PROT_WRITE  0x2
+#define PROT_EXEC   0x4
 
-// mmap flags
-#define MAP_FAILED ((void*)-1)
-#define MAP_ANONYMOUS 0x20
+/* mmap flags */
+#define MAP_SHARED    0x01
 #define MAP_PRIVATE   0x02
-#define PROT_READ     0x1
-#define PROT_WRITE    0x2
-#define PROT_EXEC     0x4
+#define MAP_FIXED     0x10
+#define MAP_ANONYMOUS 0x20
 
-// brk - change data segment size (heap management)
-int64_t sys_brk(uint64_t addr, uint64_t arg2, uint64_t arg3,
-                uint64_t arg4, uint64_t arg5, uint64_t arg6) {
-    (void)arg2; (void)arg3; (void)arg4; (void)arg5; (void)arg6;
-    
-    task_t *current = get_current_task();
-    if (!current || !current->cr3) {
-        return -1;
-    }
-    
-    // Initialize brk if not set
-    if (current->brk_start == 0) {
-        // Set heap start to a fixed address after code
-        // Typically after the ELF sections, we use 0x600000
-        current->brk_start = 0x600000;
-        current->brk_current = current->brk_start;
-    }
-    
-    // If addr is 0, return current brk
-    if (addr == 0) {
-        return (int64_t)current->brk_current;
-    }
-    
-    // Can't shrink below brk_start
-    if (addr < current->brk_start) {
-        return (int64_t)current->brk_current;
-    }
-    
-    // Expand the heap
-    uint64_t old_brk = current->brk_current;
-    uint64_t new_brk = addr;
-    
-    // Align new_brk to page boundary for mapping
-    uint64_t old_page = (old_brk + 4095) & ~4095ULL;
-    uint64_t new_page = (new_brk + 4095) & ~4095ULL;
-    
-    // Map new pages if needed
-    if (new_page > old_page) {
-        uint64_t flags = PTE_PRESENT | PTE_RW | PTE_USER;
-        for (uint64_t vaddr = old_page; vaddr < new_page; vaddr += 4096) {
-            void *page = pmalloc(1);
-            if (!page) {
-                return (int64_t)current->brk_current;  // Allocation failed
-            }
-            memset(page, 0, 4096);
-            void *phys = phys_from_virt(page);
-            if (vmm_map_page_in(current->cr3, (void*)vaddr, phys, flags) != 0) {
-                pmm_free_pages(page, 1);
-                return (int64_t)current->brk_current;
-            }
-        }
-    }
-    
-    current->brk_current = new_brk;
-    return (int64_t)current->brk_current;
+#define MAP_FAILED    ((void *)-1)
+
+/*
+ * Virtual address space layout (user-space):
+ *
+ *   0x400000             ELF load base (typical)
+ *   brk_start            set by ELF loader to page-aligned end of BSS
+ *   brk_current          moves up as malloc/brk expands the heap
+ *   ...
+ *   0x00007F0000000000   mmap region grows downward from here
+ *   0x00007FFFFFFFFFFF   top of canonical user space
+ *
+ * brk_start is stored in task_t and set during ELF loading.
+ * USER_HEAP_FALLBACK is only used if the ELF loader didn't set it
+ * (e.g. a hand-crafted test binary).
+ *
+ * task_t fields required:
+ *   uint64_t  brk_start;    -- set by ELF loader, page-aligned end of BSS
+ *   uint64_t  brk_current;  -- current break pointer
+ *   uint64_t  mmap_base;    -- per-process mmap bump pointer
+ */
+#define USER_HEAP_FALLBACK  0x0000000001000000ULL   /* 16 MiB, well clear of ELF */
+#define MMAP_BASE           0x00007F0000000000ULL   /* top of user mmap region */
+
+/* Page helpers */
+#define PAGE_MASK           (~(PAGE_SIZE - 1))
+#define PAGE_ALIGN_UP(x)    (((uint64_t)(x) + PAGE_SIZE - 1) & PAGE_MASK)
+#define PAGE_ALIGN_DOWN(x)  ((uint64_t)(x) & PAGE_MASK)
+
+/*
+ * NX bit (bit 63) marks a page non-executable on x86-64.
+ * Requires IA32_EFER.NXE = 1, which your early boot should set.
+ */
+#define PTE_NX (1ULL << 63)
+
+/* -------------------------------------------------------------------------
+ * Internal helpers
+ * ---------------------------------------------------------------------- */
+
+/*
+ * prot_to_flags — convert POSIX prot bits to x86-64 PTE flags.
+ *
+ * PROT_NONE results in a present-but-inaccessible page (no RW, no user
+ * without PTE_USER — but we always set PTE_USER here since these are
+ * user mappings). For true PROT_NONE you'd want to not set PTE_USER either;
+ * keep this simple for now and document the limitation.
+ */
+static uint64_t prot_to_flags(uint64_t prot)
+{
+    uint64_t flags = PTE_PRESENT | PTE_USER;
+
+    if (prot & PROT_WRITE)
+        flags |= PTE_RW;
+
+    /*
+     * Set NX on every mapping that doesn't explicitly request EXEC.
+     * This enforces W^X at the page level.
+     */
+    if (!(prot & PROT_EXEC))
+        flags |= PTE_NX;
+
+    return flags;
 }
 
+static int map_pages(uint64_t cr3, uint64_t vaddr, size_t num_pages, uint64_t flags)
+{
+    size_t mapped = 0;
 
-
-// mmap - map memory
-int64_t sys_mmap(uint64_t addr, uint64_t length, uint64_t prot,
-                 uint64_t flags, uint64_t fd, uint64_t offset) {
-    (void)fd; (void)offset;  // Currently unused for anonymous mappings
-    
-    task_t *current = get_current_task();
-    if (!current || !current->cr3) {
-        return -1;
-    }
-    
-    // Only support anonymous mappings for now
-    if (!(flags & MAP_ANONYMOUS)) {
-        dbgln("sys_mmap: only anonymous mappings supported\n\r");
-        return -1;
-    }
-    
-    if (length == 0) return -1;
-    
-    // Round up to page boundary
-    size_t num_pages = (length + 4095) / 4096;
-    
-    // Find a free virtual address range if addr is 0
-    // Use a simple allocator starting at 0x700000000000
-    static uint64_t next_mmap_addr = 0x700000000000ULL;
-    
-    uint64_t vaddr;
-    if (addr == 0) {
-        vaddr = next_mmap_addr;
-        next_mmap_addr += num_pages * 4096;
-    } else {
-        vaddr = addr & ~4095ULL;  // Page align
-    }
-    
-    // Build page flags
-    uint64_t page_flags = PTE_PRESENT | PTE_USER;
-    if (prot & PROT_WRITE) page_flags |= PTE_RW;
-    
-    // Allocate and map pages
     for (size_t i = 0; i < num_pages; i++) {
         void *page = pmalloc(1);
-        if (!page) {
-            // TODO: unmap already mapped pages
-            return -1;
-        }
-        memset(page, 0, 4096);
+        if (!page)
+            goto oom;
+
+        memset(page, 0, PAGE_SIZE);
+
         void *phys = phys_from_virt(page);
-        if (vmm_map_page_in(current->cr3, (void*)(vaddr + i * 4096), phys, page_flags) != 0) {
+        if (vmm_map_page_in(cr3,
+                            (void *)(vaddr + i * PAGE_SIZE),
+                            phys, flags) != 0) {
             pmm_free_pages(page, 1);
-            return -1;
+            goto oom;
+        }
+
+        mapped++;
+    }
+
+    return 0;
+
+oom:
+    /* Roll back all successfully mapped pages */
+    for (size_t i = 0; i < mapped; i++) {
+        void *phys = vmm_unmap_page_in(cr3,
+                                       (void *)(vaddr + i * PAGE_SIZE));
+        if (phys)
+            pmm_free_pages(virt_from_phys(phys), 1);
+    }
+    return -ENOMEM;
+}
+
+static void unmap_pages(uint64_t cr3, uint64_t vaddr, size_t num_pages)
+{
+    for (size_t i = 0; i < num_pages; i++) {
+        void *phys = vmm_unmap_page_in(cr3,
+                                       (void *)(vaddr + i * PAGE_SIZE));
+        if (phys)
+            pmm_free_pages(virt_from_phys(phys), 1);
+    }
+}
+
+int64_t sys_brk(uint64_t addr, uint64_t arg2, uint64_t arg3,
+                uint64_t arg4, uint64_t arg5, uint64_t arg6)
+{
+    (void)arg2; (void)arg3; (void)arg4; (void)arg5; (void)arg6;
+
+    task_t *current = get_current_task();
+    if (!current || !current->cr3)
+        return -ESRCH;
+    if (current->brk_start == 0) {
+        current->brk_start   = USER_HEAP_FALLBACK;
+        current->brk_current = USER_HEAP_FALLBACK;
+    }
+
+    if (addr == 0)
+        return (int64_t)current->brk_current;
+
+    if (addr < current->brk_start)
+        return (int64_t)current->brk_current;
+
+    uint64_t old_brk = current->brk_current;
+    uint64_t new_brk = addr;
+
+    if (new_brk > old_brk) {
+        uint64_t map_start = PAGE_ALIGN_UP(old_brk);
+        uint64_t map_end   = PAGE_ALIGN_UP(new_brk);
+
+        if (map_end > map_start) {
+            size_t   n     = (map_end - map_start) / PAGE_SIZE;
+            uint64_t flags = prot_to_flags(PROT_READ | PROT_WRITE);
+
+            if (map_pages(current->cr3, map_start, n, flags) != 0) {
+                return (int64_t)old_brk;
+            }
+        }
+
+    } else if (new_brk < old_brk) {
+        uint64_t unmap_start = PAGE_ALIGN_UP(new_brk);
+        uint64_t unmap_end   = PAGE_ALIGN_UP(old_brk);
+
+        if (unmap_end > unmap_start) {
+            size_t n = (unmap_end - unmap_start) / PAGE_SIZE;
+            unmap_pages(current->cr3, unmap_start, n);
         }
     }
-    
-    dbgln("sys_mmap: mapped %d pages at 0x%xl\n\r", (int)num_pages, vaddr);
+
+    current->brk_current = new_brk;
+    return (int64_t)new_brk;
+}
+
+/* -------------------------------------------------------------------------
+ * sys_mmap — map memory into the process address space.
+ *
+ * Currently only anonymous mappings are supported (MAP_ANONYMOUS).
+ * The per-process bump pointer lives in task->mmap_base (add this field
+ * to task_t; it is initialized to MMAP_BASE on first use).
+ * ---------------------------------------------------------------------- */
+int64_t sys_mmap(uint64_t addr, uint64_t length, uint64_t prot,
+                 uint64_t flags, uint64_t fd, uint64_t offset)
+{
+    (void)fd; (void)offset;
+
+    task_t *current = get_current_task();
+    if (!current || !current->cr3)
+        return -ESRCH;
+
+    if (length == 0)
+        return -EINVAL;
+
+    if (!(flags & MAP_ANONYMOUS)) {
+        dbgln("sys_mmap: file-backed mappings not yet supported\n\r");
+        return -ENOSYS;
+    }
+
+    if (!(flags & (MAP_PRIVATE | MAP_SHARED)))
+        return -EINVAL;
+
+    size_t   num_pages  = PAGE_ALIGN_UP(length) / PAGE_SIZE;
+    uint64_t page_flags = prot_to_flags(prot);
+    uint64_t vaddr;
+
+    if (flags & MAP_FIXED) {
+        /*
+         * MAP_FIXED: use the provided address exactly.
+         * addr must be page-aligned and non-zero.
+         * TODO: unmap any existing mapping in [addr, addr + length).
+         */
+        if (addr == 0 || (addr & ~PAGE_MASK))
+            return -EINVAL;
+
+        vaddr = addr;
+
+    } else if (addr != 0) {
+        vaddr = PAGE_ALIGN_DOWN(addr);
+
+    } else {
+        if (current->mmap_base == 0)
+            current->mmap_base = MMAP_BASE;
+
+        vaddr               = current->mmap_base;
+        current->mmap_base += num_pages * PAGE_SIZE;
+    }
+
+    int ret = map_pages(current->cr3, vaddr, num_pages, page_flags);
+    if (ret != 0)
+        return ret;   /* -ENOMEM, with all partial pages already cleaned up */
+
+    dbgln("sys_mmap: mapped %zu pages at 0x%llx\n\r", num_pages, vaddr);
     return (int64_t)vaddr;
 }
 
-// munmap - unmap memory
 int64_t sys_munmap(uint64_t addr, uint64_t length, uint64_t arg3,
-                   uint64_t arg4, uint64_t arg5, uint64_t arg6) {
+                   uint64_t arg4, uint64_t arg5, uint64_t arg6)
+{
     (void)arg3; (void)arg4; (void)arg5; (void)arg6;
-    
-    // TODO: implement proper unmapping
-    // For now, just return success
-    (void)addr; (void)length;
+
+    task_t *current = get_current_task();
+    if (!current || !current->cr3)
+        return -ESRCH;
+
+    /* addr must be page-aligned and non-zero; length must be non-zero */
+    if (addr == 0 || (addr & ~PAGE_MASK) || length == 0)
+        return -EINVAL;
+
+    size_t num_pages = PAGE_ALIGN_UP(length) / PAGE_SIZE;
+    unmap_pages(current->cr3, addr, num_pages);
+
     return 0;
 }

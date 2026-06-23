@@ -18,8 +18,6 @@ register_t *current_syscall_regs = NULL;
 
 int64_t syscall_dispatch(register_t* regs) {
     uint64_t syscall_num = regs->rax;
-    
-    // Save regs pointer for fork/exec
     current_syscall_regs = regs;
     
     if (syscall_num >= MAX_SYSCALLS || !syscall_handlers[syscall_num]) {
@@ -55,7 +53,7 @@ void init_syscalls(void) {
     syscall_register(SYS_FORK, sys_fork);
     syscall_register(SYS_EXEC, sys_exec);
     syscall_register(SYS_WAITPID, sys_waitpid);
-    syscall_register(SYS_SPAWN, sys_spawn);
+    syscall_register(SYS_SPAWN, sys_fork);
     syscall_register(SYS_BRK, sys_brk);
     syscall_register(SYS_MMAP, sys_mmap);
     syscall_register(SYS_MUNMAP, sys_munmap);

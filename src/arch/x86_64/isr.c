@@ -129,10 +129,26 @@ void isr_uninstall_handler(int isr){
 
 void fault_handler(register_t* regs)
 {
-    if (regs->int_no < 32){    
-        dbgln("Exception Raised! %s exception. Error code: %ul\n\rSystem Halted!\n\r", exception_messages[regs->int_no], regs->int_no);
-        //log(ERROR, "Exception Raised! %s exception. Error code: %d\nSystem Halted!\n", exception_messages[regs->int_no], regs->int_no);/*raise an error*/
-        //printf("rax: 0x%xl\trbx: 0x%xl\trcx: 0x%xl\nrdx: 0x%xl\trdi: 0x%xl\trbp: 0x%xl\n", regs->rax, regs->rbx, regs->rcx, regs->rdx, regs->rdi, regs->rbp);
-        for (;;);   /*halt the system*/
+    if (regs->int_no < 32) {
+        dbgln("\n\r==================================================\n\r");
+        dbgln("FATAL EXCEPTION: %s (Interrupt %d)\n\r", exception_messages[regs->int_no], regs->int_no);
+        
+        dbgln("Hardware Error Code: 0x%xl\n\r", regs->err_code); 
+        dbgln("Instruction Pointer (RIP): 0x%xl\n\r", regs->rip);
+        if (regs->int_no == 14) {
+            uint64_t cr2;
+            asm volatile("mov %%cr2, %0" : "=r" (cr2));
+            dbgln("Faulting Virtual Address (CR2): 0x%xl\n\r", cr2);
+            
+            dbgln("Reason: %s, %s, %s\n\r",
+                (regs->err_code & 0x1) ? "Protection Violation" : "Page Not Present",
+                (regs->err_code & 0x2) ? "Write Fault" : "Read Fault",
+                (regs->err_code & 0x4) ? "User Mode (Ring 3)" : "Kernel Mode (Ring 0)"
+            );
+        }
+
+        dbgln("System Halted!\n\r");
+        dbgln("==================================================\n\r");
+        for (;;);
     }
 }
