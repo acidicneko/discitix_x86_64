@@ -71,6 +71,11 @@ typedef struct {
     size_t   num_pages;      // Number of allocated pages
 } elf_info_t;
 
+typedef struct {
+    uint64_t user_vaddr;
+    void* kernel_vaddr;
+} elf_page_t;
+
 int elf_validate(const void* data, size_t size);
 
 // Load ELF into memory using current page table

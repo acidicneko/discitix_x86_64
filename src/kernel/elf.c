@@ -67,11 +67,6 @@ static inline uint64_t page_align_down(uint64_t addr) {
     return addr & ~0xFFFULL;
 }
 
-typedef struct {
-    uint64_t user_vaddr;
-    void*    kernel_vaddr; // Kernel-space virtual address (for copying)
-} elf_page_t;
-
 
 static int elf_load_impl(const void* data, size_t size, elf_info_t* info, uint64_t cr3_phys) {
     if (elf_validate(data, size) != 0) {

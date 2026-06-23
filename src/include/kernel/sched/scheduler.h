@@ -29,10 +29,8 @@ typedef struct task {
     int parent_id;         // Parent task ID (0 if orphan/init)
     int exit_status;       // Exit status for waitpid
     
-    // Per-process page table (physical address for CR3)
     uint64_t cr3;          // Physical address of PML4 for this process
     
-    // Heap management (brk)
     uint64_t brk_start;    // Start of heap (end of BSS)
     uint64_t brk_current;  // Current program break
     
@@ -41,12 +39,10 @@ typedef struct task {
     void *user_code;       // User code page (for cleanup) - or ELF pages array
     void *user_stack;      // User stack page (for cleanup)
     size_t user_code_pages; // Number of user code pages (for ELF)
-    
-    // File descriptor table (fd 0=stdin, 1=stdout, 2=stderr)
+    uint64_t mmap_base;
     struct file *fd_table[MAX_FDS];
     
-    // Current working directory
-    void *cwd;  // dentry_t* - current working directory
+    void *cwd;  
 } task_t;
 
 void init_scheduler();

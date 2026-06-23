@@ -18,6 +18,6 @@ uint32_t get_free_physical_memory();
 	offset. Call these after init_pmm() has run. */
 void *phys_from_virt(void *virt);
 void *virt_from_phys(void *phys);
-
+void init_procfs();
 
 #endif

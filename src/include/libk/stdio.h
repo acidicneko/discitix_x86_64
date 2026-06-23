@@ -8,6 +8,7 @@
 void putchar(char c);
 void puts(const char* str);
 int __vsprintf__(char *fmt, va_list args, void (*putchar_func)(char c), void (*puts_func)(const char *str));
+int sprintf(char *out_buffer, const char *fmt, ...);
 int printf(char *fmt, ...);
 void wait(uint16_t ms);
 void gets(char* to);

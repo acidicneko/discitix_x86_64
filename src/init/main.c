@@ -33,10 +33,10 @@ SOFTWARE. */
 #include <drivers/tty/psf2.h>
 #include <drivers/tty/tty.h>
 #include <fs/stripFS.h>
+#include <fs/procfs.h>
 #include <init/stivale2.h>
 #include <kernel/elf.h>
 #include <kernel/sched/scheduler.h>
-#include <libk/shell.h>
 #include <libk/stdio.h>
 #include <libk/string.h>
 #include <libk/utils.h>
@@ -44,7 +44,44 @@ SOFTWARE. */
 #include <mm/pmm.h>
 #include <mm/vmm.h>
 
+void enable_avx(void) {
+    uint64_t cr4;
+    
+    // 1. Enable XSAVE and Extended States in CR4
+    asm volatile("mov %%cr4, %0" : "=r"(cr4));
+    cr4 |= (1ULL << 18); // Set CR4.OSXSAVE
+    asm volatile("mov %0, %%cr4" :: "r"(cr4));
+
+    // 2. Set XCR0 (Extended Control Register 0) to allow AVX + SSE
+    uint32_t eax, edx;
+    asm volatile("xgetbv" : "=a"(eax), "=d"(edx) : "c"(0));
+    
+    eax |= (1ULL << 0); // x87 state
+    eax |= (1ULL << 1); // SSE state (XMM)
+    eax |= (1ULL << 2); // AVX state (YMM)
+    
+    asm volatile("xsetbv" :: "a"(eax), "d"(edx), "c"(0));
+}
+
+void enable_sse(void) {
+    uint64_t cr0;
+    uint64_t cr4;
+
+    // Read CR0
+    asm volatile("mov %%cr0, %0" : "=r"(cr0));
+    cr0 &= ~(1ULL << 2); // Clear CR0.EM (Emulation)
+    cr0 |= (1ULL << 1);  // Set CR0.MP (Monitor Coprocessor)
+    asm volatile("mov %0, %%cr0" :: "r"(cr0));
+
+    // Read CR4
+    asm volatile("mov %%cr4, %0" : "=r"(cr4));
+    cr4 |= (1ULL << 9);  // Set CR4.OSFXSR (Operating System FXSAVE/FXRSTOR Support)
+    cr4 |= (1ULL << 10); // Set CR4.OSXMMEXCPT (Operating System Unmasked Exception Support)
+    asm volatile("mov %0, %%cr4" :: "r"(cr4));
+}
+
 void init_kernel() {
+  enable_sse();
   initial_psf_setup();
   init_arg_parser();
   if (!arg_exist("noserial")) {
@@ -63,6 +100,7 @@ void init_kernel() {
   liballoc_init();
   init_vmm();
   init_initrd_stripFS();
+  init_procfs();
   vfs_mkdir("/dev");
   init_serial_device();
   init_syscalls();
@@ -99,13 +137,15 @@ void init_kernel() {
   print_font_details();
 }
 
-task_t* run_elf_from_initrd(const char* filename) {
+task_t* run_elf_from_initrd(const char* filename, int argc, char *argv[]) {
     inode_t* inode = NULL;
     file_t* file = NULL;
     
+    // Absolute path resolution formatting safely bounded
     char path[256];
     path[0] = '/';
     strncpy(path + 1, filename, sizeof(path) - 2);
+    path[sizeof(path) - 1] = '\0'; // Guarantee null-termination
     
     if (vfs_lookup_path(path, &inode) != 0 || !inode) {
         dbgln("ELF: File not found: %s\n\r", path);
@@ -113,32 +153,42 @@ task_t* run_elf_from_initrd(const char* filename) {
     }
     
     if (vfs_open(&file, inode, 0) != 0 || !file) {
-        dbgln("ELF: Failed to open: %s\n\r", path);
+        dbgln("ELF: Failed to open file descriptor: %s\n\r", path);
         return NULL;
     }
     
     size_t file_size = inode->size;
-    void* buffer = pmalloc((file_size + 4095) / 4096);
+    size_t pages_needed = (file_size + 4095) / 4096;
+    
+    void* buffer = pmalloc(pages_needed);
     if (!buffer) {
-        dbgln("ELF: Failed to allocate buffer for %d bytes\n\r", (int)file_size);
+        dbgln("ELF: OOM allocating temporary buffer for %s (%d bytes)\n\r", path, (int)file_size);
         vfs_close(file);
         return NULL;
     }
   
     size_t bytes_read = vfs_read(file, buffer, file_size);
-    vfs_close(file);
+    vfs_close(file); // Close the file stream early now that data is in-memory
     
     if (bytes_read != file_size) {
-        dbgln("ELF: Read failed, got %d of %d bytes\n\r", (int)bytes_read, (int)file_size);
-        pmm_free_pages(buffer, (file_size + 4095) / 4096);
+        dbgln("ELF: Read size mismatch on %s, got %d of %d bytes\n\r", path, (int)bytes_read, (int)file_size);
+        pmm_free_pages(buffer, pages_needed);
         return NULL;
     }
     
-    dbgln("ELF: Loaded %s (%d bytes)\n\r", filename, (int)file_size);
+    dbgln("ELF: Loaded %s successfully to buffer. Routing to context generator...\n\r", filename);
     
-    task_t* task = create_elf_task(buffer, file_size, 2);
+    // Call our newly revamped task builder with full ABI compatibility!
+    // We pass 4 pages for the kernel execution stack to avoid overflow during nested interrupts.
+    task_t* task = create_elf_task_args(buffer, file_size, 4, argc, argv);
     
-    pmm_free_pages(buffer, (file_size + 4095) / 4096);
+    // Clean up temporary copy buffer now that the loader has mapped the binary into child CR3 space
+    pmm_free_pages(buffer, pages_needed);
+    
+    if (!task) {
+        dbgln("ELF: Failed context generation structure for executable %s\n\r", filename);
+        return NULL;
+    }
     
     return task;
 }
@@ -147,7 +197,9 @@ void kmain() {
   init_kernel();
   sysfetch();
 
-  task_t* elf_task = run_elf_from_initrd("authy");
+  char* argv[] = {"/sh", NULL};
+  task_t* elf_task = run_elf_from_initrd("sh", 1, argv);
+  
   if (elf_task) {
       dbgln("Created ELF task id=%d from initrd\n\r", elf_task->id);
   } else {

@@ -33,7 +33,7 @@ userland:
 	@echo "[USERLAND]"
 	@$(MAKE) -C userland
 
-$(IMAGE): $(TARGET) userland
+$(IMAGE): $(TARGET) #userland
 	@echo "[STRIPCTL]"
 	@./misc/initrd/build.sh
 	@echo [CREATE IMAGE]
@@ -68,7 +68,7 @@ $(TARGET): $(OFILES)
 clean:
 	@echo [CLEAN] 
 	@rm -f $(OFILES) $(TARGET) $(IMAGE)
-	@$(MAKE) -C userland clean
+	#@$(MAKE) -C userland clean
 
 run:
 	@echo [RUN] $(IMAGE)
@@ -79,5 +79,7 @@ setup:
 	@make -C limine
 	@echo Building stripctl
 	@make -C stripFS
+	@cd userland \
+		./setup_userland.sh
 
 all: clean $(IMAGE) run
