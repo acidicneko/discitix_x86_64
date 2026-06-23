@@ -12,7 +12,7 @@
 #define PTE_ACCESSED (1ULL << 5)
 #define PTE_DIRTY (1ULL << 6)
 #define PTE_PSE (1ULL << 7)
-
+#define PTE_NX (1ULL << 63)
 int init_vmm();
 
 // Map a single 4KiB page: virtual -> physical with given pte flags (or 0 for default rw).
@@ -37,5 +37,9 @@ uint64_t vmm_get_cr3(void);
 
 // Free a user page table (frees only user-space entries, not kernel)
 void vmm_free_user_page_table(uint64_t cr3_phys);
+
+
+uint64_t vmm_clone_user_page_table(uint64_t parent_cr3_phys);
+void *vmm_unmap_page_in(uint64_t cr3_phys, void *virt);
 
 #endif
