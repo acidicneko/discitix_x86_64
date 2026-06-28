@@ -31,11 +31,11 @@ IMAGE = build/image.hdd
 # Build userland programs first
 userland:
 	@echo "[USERLAND]"
-	@$(MAKE) -C userland
+	@$(MAKE) -C userland/ sysroot	
 
-$(IMAGE): $(TARGET) #userland
+$(IMAGE): $(TARGET) userland
 	@echo "[STRIPCTL]"
-	@./misc/initrd/build.sh
+	# @./misc/initrd/build.sh
 	@echo [CREATE IMAGE]
 	@dd if=/dev/zero of=$(IMAGE) bs=1M count=64
 	@parted -s $(IMAGE) mklabel msdos
@@ -44,11 +44,14 @@ $(IMAGE): $(TARGET) #userland
 	sudo mkfs.fat -F32 $${LOOPDEV}p1 && \
 	mkdir -p build/mnt && \
 	sudo mount $${LOOPDEV}p1 build/mnt && \
-	sudo cp $(TARGET) build/mnt/kernel.elf && \
-	sudo cp misc/initrd/initrd.img build/mnt/initrd.img && \
-	sudo cp misc/limine.conf build/mnt/limine.conf && \
-	sudo cp limine/limine*.sys build/mnt/ && \
+	sudo mkdir build/mnt/boot && \
+	sudo cp $(TARGET) build/mnt/boot/kernel.elf && \
+	sudo cp misc/initrd/initrd.img build/mnt/boot/initrd.img && \
+	sudo cp misc/limine.conf build/mnt/boot/limine.conf && \
+	sudo cp limine/limine*.sys build/mnt/boot/ && \
+	sudo cp misc/default.psf build/mnt/font.psf && \
 	sudo ./limine/limine bios-install $(IMAGE) && \
+	sudo cp -r userland/sysroot/. build/mnt && \
 	sudo umount build/mnt && \
 	sudo losetup -d $${LOOPDEV}
 	@echo "[DONE]"
@@ -68,7 +71,7 @@ $(TARGET): $(OFILES)
 clean:
 	@echo [CLEAN] 
 	@rm -f $(OFILES) $(TARGET) $(IMAGE)
-	#@$(MAKE) -C userland clean
+	@$(MAKE) -C userland clean
 
 run:
 	@echo [RUN] $(IMAGE)
