@@ -19,5 +19,6 @@ int strcmp(const char *s1, const char *s2);
 char *strcat(char *d, const char *s);
 const char *strchr(const char *s, char ch);
 char *strtok(char *s, const char *delim);
+char toupper(char c);
 
 #endif

@@ -27,5 +27,6 @@ long stripfs_file_read(file_t *f, void *buf, size_t len, uint64_t off);
 int stripfs_file_open(inode_t *inode, uint32_t flags);
 int stripfs_file_close(inode_t *inode);
 inode_t *stripfs_dir_lookup(inode_t *parent, const char *name);
+long stripfs_dir_getdents(inode_t *inode, uint64_t *offset, void *buf_ptr, uint32_t count);
 
 #endif // !__STRIP_FS__

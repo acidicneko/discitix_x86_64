@@ -1,3 +1,4 @@
+#include "fs/devfs.h"
 #include <arch/ports.h>
 #include <drivers/serial.h>
 #include <libk/stdio.h>
@@ -74,23 +75,6 @@ long serial_write(file_t* file, const void* buf, size_t count, uint64_t off){
 
 
 void init_serial_device(){
-    inode_t* serial_inode = NULL;
-    superblock_t* root_sb = vfs_get_root_superblock();
-    if(!root_sb){
-        dbgln("Serial: Failed to get root superblock!\n\r");
-        return;
-    }
-    serial_inode = (inode_t*)kmalloc(sizeof(inode_t));
-    memset(serial_inode, 0, sizeof(inode_t));
-    serial_inode->atime = 0;
-    serial_inode->ctime = 0;
-    serial_inode->is_directory = 0;
-    serial_inode->type = FT_CHR;
-    serial_inode->size = 0;
-    serial_inode->ino = 5000;
-    serial_inode->f_ops = &serial_file_ops;
-    serial_inode->mode = 2;
-
-    vfs_register_device("/dev/sr0", serial_inode);
+    devfs_register_device("sr0", &serial_file_ops, FT_CHR); 
     dbgln("Serial: Registered /dev/sr0\n\r");
 }

@@ -3,6 +3,7 @@
 #include <kernel/vfs/vfs.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
+#include <mm/liballoc.h>
 #include <arch/x86_64/gdt.h>
 #include <libk/string.h>
 #include <libk/utils.h>
@@ -140,16 +141,19 @@ static void setup_task_stdio(task_t *t) {
     if (!tty) return;
     
     char tty_path[16] = "/dev/tty";
-    char id_str[2];
+    char id_str[8]; 
     itoa(tty->id, id_str, 10);
     strcat(tty_path, id_str);
     
     inode_t *tty_inode = NULL;
-    if (vfs_lookup_path(tty_path, &tty_inode) != 0 || !tty_inode) return;
+    if (vfs_lookup_path(tty_path, &tty_inode) != 0 || !tty_inode) {
+        dbgln("setup_task_stdio: Could not find %s", tty_path);
+        return;
+    }
     
     for (int fd = 0; fd < 3; fd++) {
         file_t *f = NULL;
-        if (vfs_open(&f, tty_inode, 0) == 0 && f) {
+        if (vfs_open(&f, tty_inode, 2) == 0 && f) {
             t->fd_table[fd] = f;
         }
     }
@@ -165,7 +169,7 @@ task_t *create_elf_task_args(const void *elf_data, size_t elf_size, size_t stack
         return NULL;
     }
     
-    task_t *t = (task_t *)pmalloc(1);
+    task_t *t = (task_t *)kmalloc(sizeof(task_t));
     void *kernel_stack = pmalloc(stack_pages);
     void *ustack = pmalloc(2); 
     
@@ -178,14 +182,14 @@ task_t *create_elf_task_args(const void *elf_data, size_t elf_size, size_t stack
         return NULL;
     }
     memset(t, 0, 4096);
-    
+    t->brk_start   = elf_info.end_addr;
+    t->brk_current = elf_info.end_addr;
     uint64_t user_flags = PTE_PRESENT | PTE_RW | PTE_USER;
     void *ustack_phys1 = phys_from_virt(ustack);
     void *ustack_phys2 = phys_from_virt((void*)((uint64_t)ustack + 4096));
     
     if (vmm_map_page_in(task_cr3, (void*)USER_STACK_VADDR, ustack_phys1, user_flags) != 0 ||
         vmm_map_page_in(task_cr3, (void*)(USER_STACK_VADDR + 4096), ustack_phys2, user_flags) != 0) {
-        // [Cleanup omitted for brevity...]
         if (t) pmm_free_pages(t, 1);
         if (kernel_stack) pmm_free_pages(kernel_stack, stack_pages);
         if (ustack) pmm_free_pages(ustack, 2);
@@ -206,21 +210,38 @@ task_t *create_elf_task_args(const void *elf_data, size_t elf_size, size_t stack
         arg_user_ptrs[i] = USER_STACK_VADDR + offset;
     }
     
-    // 2. Align & Push Array
-    offset &= ~7ULL; // 8-byte boundary
-    offset -= 8;
-    *(uint64_t*)(kstack_base + offset) = 0; // NULL terminator
+    // 2. The Bulletproof ABI Alignment
+    // Space needed: envp NULL (8) + argv NULL (8) + argv ptrs (8 * argc) + argc (8)
+    uint64_t array_size = 24 + (8 * argc);
     
+    // Calculate a perfectly 16-byte aligned RSP
+    uint64_t target_rsp = (USER_STACK_VADDR + offset - array_size) & ~0xFULL;
+    
+    // Shift our offset down so the arrays perfectly hit the target_rsp
+    offset = target_rsp - USER_STACK_VADDR + array_size;
+    
+    // 3. Push Arrays (From top to bottom)
+    
+    // Push envp NULL
+    offset -= 8;
+    *(uint64_t*)(kstack_base + offset) = 0;
+    
+    // Push argv NULL
+    offset -= 8;
+    *(uint64_t*)(kstack_base + offset) = 0;
+    
+    // Push argv pointers
     for (int i = argc - 1; i >= 0; i--) {
         offset -= 8;
         *(uint64_t*)(kstack_base + offset) = arg_user_ptrs[i];
     }
     
-    uint64_t argv_user_vaddr = USER_STACK_VADDR + offset;
+    // Push argc
+    offset -= 8;
+    *(uint64_t*)(kstack_base + offset) = (uint64_t)argc;
     
-    // 3. Align RSP to strict 16-byte boundary
-    offset &= ~0xFULL; 
-    uint64_t final_rsp = USER_STACK_VADDR + offset;
+    uint64_t final_rsp = USER_STACK_VADDR + offset; 
+    uint64_t argv_user_vaddr = final_rsp + 8; // Pointer to argv array (right after argc)
 
     t->stack_base = kernel_stack;
     t->stack_pages = stack_pages;
@@ -231,22 +252,31 @@ task_t *create_elf_task_args(const void *elf_data, size_t elf_size, size_t stack
     t->user_code = elf_info.pages;
     t->user_stack = ustack;
     t->user_code_pages = elf_info.num_pages;
-    
+
     memset(&t->regs, 0, sizeof(register_t));
     t->regs.rip = elf_info.entry_point;
     t->regs.cs = 0x20 | 3;   
     t->regs.rflags = 0x202;
-    t->regs.rsp = final_rsp;        // SAFE, PROTECTED STACK POINTER!
+    t->regs.rsp = final_rsp;        // SAFE, PROTECTED STACK POINTER
     t->regs.ss = 0x18 | 3;   
-    
+     
+    // System V ABI technically expects _start to read from RSP, 
+    // but some early crt0 implementations use rdi/rsi. Providing both is safe.
     t->regs.rdi = argc;         
-    t->regs.rsi = argv_user_vaddr;  // CORRECTLY CALCULATED USER POINTER!
+    t->regs.rsi = argv_user_vaddr;  
     
+    // Inherit the Working Directory safely
+    task_t *current_task = get_current_task();
+    if (current_task && current_task->cwd) {
+        t->cwd = current_task->cwd; 
+    } else {
+        t->cwd = (void*)vfs_get_root_dentry(); 
+    }
+     
     setup_task_stdio(t);
     task_enqueue(t);
     return t;
 }
-
 task_t *fork_current_task(register_t *parent_regs) {
     task_t *parent = current;
     if (!parent || !parent->is_usermode) return NULL;
@@ -313,6 +343,9 @@ task_t *fork_current_task(register_t *parent_regs) {
     }
     
     child->stack_base = kernel_stack;
+    child->brk_start   = parent->brk_start;
+    child->brk_current = parent->brk_current;
+    child->mmap_base   = parent->mmap_base;
     child->stack_pages = parent->stack_pages;
     child->state = TASK_RUNNABLE;
     child->id = next_task_id++;
@@ -323,7 +356,7 @@ task_t *fork_current_task(register_t *parent_regs) {
     child->user_stack = child_user_stack; 
     child->user_code_pages = parent->user_code_pages;
     child->cwd = parent->cwd;
-    
+
     memcpy((uint8_t*)&child->regs, (const uint8_t*)parent_regs, sizeof(register_t));
     
     child->regs.rax = 0; 

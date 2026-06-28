@@ -20,27 +20,6 @@ struct user_stat {
 };
 
 
-#define S_IFDIR  0040000
-#define S_IFREG  0100000
-#define S_IFCHR  0020000
-#define S_IFBLK  0060000
-#define S_IFLNK  0120000
-#define S_IFIFO  0010000
-#define S_IFSOCK 0140000
-
-struct linux_dirent64 {
-    uint64_t d_ino;      // Inode number
-    int64_t  d_off;      // Offset to next dirent
-    uint16_t d_reclen;   // Length of this dirent
-    uint8_t  d_type;     // File type
-    char     d_name[];   // Filename (null-terminated)
-};
-
-#define DT_UNKNOWN 0
-#define DT_REG     8   // Regular file
-#define DT_DIR     4   // Directory
-
-
 int64_t sys_write(uint64_t fd, uint64_t buf, uint64_t count,
                   uint64_t arg4, uint64_t arg5, uint64_t arg6) {
     (void)arg4; (void)arg5; (void)arg6;
@@ -74,10 +53,9 @@ int64_t sys_write(uint64_t fd, uint64_t buf, uint64_t count,
 int64_t sys_read(uint64_t fd, uint64_t buf, uint64_t count,
                  uint64_t arg4, uint64_t arg5, uint64_t arg6) {
     (void)arg4; (void)arg5; (void)arg6;
-    
     char* user_buf = (char*)buf;
+
     task_t *current = get_current_task();
-    
     if (!current) return -1;
     
     // Handle all file descriptors via fd_table (0=stdin, 1=stdout, 2=stderr, 3+=files)
@@ -88,11 +66,20 @@ int64_t sys_read(uint64_t fd, uint64_t buf, uint64_t count,
     file_t *f = current->fd_table[fd];
     return vfs_read(f, user_buf, count);
 }
+#define O_RDONLY    0x0000
+#define O_WRONLY    0x0001
+#define O_RDWR      0x0002
+#define O_APPEND    0x0008
+#define O_CREAT     0x0200  // 512 in decimal
+#define O_TRUNC     0x0400  // 1024 in decimal
+
+#define ENOENT 2
+
 
 int64_t sys_open(uint64_t path_ptr, uint64_t flags, uint64_t mode,
                  uint64_t arg4, uint64_t arg5, uint64_t arg6) {
     (void)mode; (void)arg4; (void)arg5; (void)arg6;
-    
+    dbgln("DEBUG sys_open: path='%s', flags=0x%xl (decimal %d)", (const char*)path_ptr, flags, flags);
     const char *path = (const char*)path_ptr;
     task_t *current = get_current_task();
     
@@ -114,9 +101,19 @@ int64_t sys_open(uint64_t path_ptr, uint64_t flags, uint64_t mode,
     
     inode_t *inode = NULL;
     if (vfs_lookup_path(path, &inode) != 0 || !inode) {
-        dbgln("sys_open: file not found: %s\n\r", path);
-        return -1;
-    }
+      if (flags & O_CREAT) {
+            if (vfs_create(path, mode) != 0) {
+                dbgln("sys_open: vfs_create failed for %s\n\r", path);
+                return -1;
+            }
+            if (vfs_lookup_path(path, &inode) != 0 || !inode) {
+                return -1;
+            }
+        } else {
+            dbgln("sys_open: file not found: %s\n\r", path);
+            return -ENOENT; 
+        }
+    } 
     
     file_t *f = NULL;
     if (vfs_open(&f, inode, (uint32_t)flags) != 0 || !f) {
@@ -152,6 +149,24 @@ int64_t sys_close(uint64_t fd, uint64_t arg2, uint64_t arg3,
     return 0;
 }
 
+int64_t sys_mkdir(uint64_t path_ptr, uint64_t mode, uint64_t arg3,
+                  uint64_t arg4, uint64_t arg5, uint64_t arg6) {
+    (void)mode; (void)arg3; (void)arg4; (void)arg5; (void)arg6;
+    
+    const char *path = (const char*)path_ptr;
+    task_t *current = get_current_task();
+    
+    if (!current || !path) return -1;
+    
+    dbgln("DEBUG sys_mkdir: path='%s'", path);
+    
+    if (vfs_mkdir(path) != 0) {
+        return -1;     
+    }
+
+    
+    return 0; // Success!
+}
 
 static void fill_stat_from_inode(struct user_stat *st, inode_t *inode) {
     st->st_ino = inode->ino;
@@ -243,48 +258,15 @@ int64_t sys_getdents64(uint64_t fd, uint64_t buf_ptr, uint64_t count,
         dbgln("sys_getdents64: fd %d is not a directory\n\r", (int)fd);
         return -1;
     }
-    
-    // For stripfs, the directory entries are stored as dentries
-    dentry_t *dir_dentry = (dentry_t*)inode->private;
-    if (!dir_dentry) return -1;
-    
-    char *buf = (char*)buf_ptr;
-    size_t pos = 0;
-    
-    // Skip to the current offset (f->offset = number of entries already returned)
-    dentry_t *child = dir_dentry->children;
-    uint64_t skip = f->offset;
-    while (child && skip > 0) {
-        child = child->next;
-        skip--;
+    dbgln("DEBUG getdents: Inode number = %ul\n\r", inode->ino);
+    if (!inode->i_ops || !inode->i_ops->getdents) {
+        dbgln("sys_getdents64: filesystem does not support getdents\n\r");
+        return -1;
     }
-    
-    // Fill buffer with directory entries
-    while (child && pos < count) {
-        size_t name_len = strlen(child->name);
-        size_t reclen = (sizeof(struct linux_dirent64) + name_len + 1 + 7) & ~7;  // 8-byte align
-        
-        if (pos + reclen > count) break;  // No more space
-        
-        struct linux_dirent64 *dirent = (struct linux_dirent64*)(buf + pos);
-        dirent->d_ino = child->inode ? child->inode->ino : 0;
-        dirent->d_off = f->offset + 1;
-        dirent->d_reclen = (uint16_t)reclen;
-        // Use inode->type if set, otherwise fall back to is_directory check
-        if (child->inode && child->inode->type != 0) {
-            dirent->d_type = child->inode->type;
-        } else {
-            dirent->d_type = (child->inode && child->inode->is_directory) ? DT_DIR : DT_REG;
-        }
-        memcpy((uint8_t*)dirent->d_name, (const uint8_t*)child->name, name_len + 1);
-        
-        pos += reclen;
-        f->offset++;
-        child = child->next;
-    }
-    
-    return (int64_t)pos;
+
+    return inode->i_ops->getdents(inode, &f->offset, (void*)buf_ptr, count);
 }
+
 
 int64_t sys_chdir(uint64_t path_ptr, uint64_t arg2, uint64_t arg3,
                   uint64_t arg4, uint64_t arg5, uint64_t arg6) {
@@ -308,4 +290,17 @@ int64_t sys_getcwd(uint64_t buf_ptr, uint64_t size, uint64_t arg3,
     }
     
     return (int64_t)buf_ptr;  // Return pointer to buffer on success (like Linux)
+}
+
+int64_t sys_unlink(uint64_t path_ptr, uint64_t arg2, uint64_t arg3,
+                   uint64_t arg4, uint64_t arg5, uint64_t arg6) {
+    (void)arg2; (void)arg3; (void)arg4; (void)arg5; (void)arg6;
+    
+    const char *path = (const char*)path_ptr;
+    if (!path) return -1;
+    
+    if (vfs_unlink(path) != 0) {
+        return -ENOENT;
+    }
+    return 0;
 }

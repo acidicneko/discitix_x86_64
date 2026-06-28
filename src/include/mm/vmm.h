@@ -38,7 +38,7 @@ uint64_t vmm_get_cr3(void);
 // Free a user page table (frees only user-space entries, not kernel)
 void vmm_free_user_page_table(uint64_t cr3_phys);
 
-
+uint64_t vmm_get_pte(uint64_t cr3_phys, uint64_t vaddr);
 uint64_t vmm_clone_user_page_table(uint64_t parent_cr3_phys);
 void *vmm_unmap_page_in(uint64_t cr3_phys, void *virt);
 

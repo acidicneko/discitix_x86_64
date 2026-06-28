@@ -20,6 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
+#include "fs/devfs.h"
 #include "kernel/vfs/vfs.h"
 #include <arch/x86_64/gdt.h>
 #include <arch/x86_64/idt.h>
@@ -32,6 +33,7 @@ SOFTWARE. */
 #include <drivers/serial.h>
 #include <drivers/tty/psf2.h>
 #include <drivers/tty/tty.h>
+#include <fs/fat32.h>
 #include <fs/stripFS.h>
 #include <fs/procfs.h>
 #include <init/stivale2.h>
@@ -43,6 +45,7 @@ SOFTWARE. */
 #include <mm/liballoc.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
+#include <stdint.h>
 
 void enable_avx(void) {
     uint64_t cr4;
@@ -99,13 +102,13 @@ void init_kernel() {
   init_pmm();
   liballoc_init();
   init_vmm();
-  init_initrd_stripFS();
-  init_procfs();
-  vfs_mkdir("/dev");
-  init_serial_device();
+  // init_initrd_stripFS();
+  mount_filesystem();
+  // init_procfs();
+  devfs_init();
   init_syscalls();
-
   init_tty();
+  init_serial_device();
   if (arg_exist("gruvbox")) {
     init_colors(
     0x000000,  // black
@@ -197,8 +200,8 @@ void kmain() {
   init_kernel();
   sysfetch();
 
-  char* argv[] = {"/sh", NULL};
-  task_t* elf_task = run_elf_from_initrd("sh", 1, argv);
+  char* argv[] = {"sh", NULL};
+  task_t* elf_task = run_elf_from_initrd("/bin/sh", 1, argv);
   
   if (elf_task) {
       dbgln("Created ELF task id=%d from initrd\n\r", elf_task->id);

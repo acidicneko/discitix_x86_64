@@ -165,6 +165,8 @@ int64_t sys_exec(uint64_t path_ptr, uint64_t argv_ptr, uint64_t envp_ptr,
       pmm_free_pages(elf_data, (file_size + 4095) / 4096);
       return -1;
   }
+  current_task->brk_start   = elf_info.end_addr;
+  current_task->brk_current = elf_info.end_addr;
   pmm_free_pages(elf_data, (file_size + 4095) / 4096);
 
   if (current_task->user_code) {
@@ -230,7 +232,7 @@ int64_t sys_exec(uint64_t path_ptr, uint64_t argv_ptr, uint64_t envp_ptr,
   current_syscall_regs->rdi = argc;
   current_syscall_regs->rsi = final_user_argv_ptr;
   current_syscall_regs->rax = 0; // Success!
-
+  vmm_switch_page_table(current_task->cr3);
   return 0; 
 }
 

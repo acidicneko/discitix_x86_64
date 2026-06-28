@@ -62,7 +62,8 @@ void init_syscalls(void) {
     syscall_register(SYS_FSTAT, sys_fstat);
     syscall_register(SYS_CHDIR, sys_chdir);
     syscall_register(SYS_GETCWD, sys_getcwd);
-    
+    syscall_register(SYS_MKDIR, sys_mkdir);
+    syscall_register(SYS_UNLINK, sys_unlink);
     // Set up interrupt 0x80 for syscalls
     // Flags: 0xEE = Present(1) | DPL(11) | Type(01110) = interrupt gate accessible from Ring 3
     idt_set_gate(0x80, (uint64_t)syscall_stub, GDT_KERNEL_CODE, 0xEE);

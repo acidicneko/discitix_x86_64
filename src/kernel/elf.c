@@ -139,12 +139,14 @@ static int elf_load_impl(const void* data, size_t size, elf_info_t* info, uint64
         if (phdr->p_type != PT_LOAD) continue;
         if (phdr->p_memsz == 0) continue;
         
-        dbgln("ELF: Loading segment %d: vaddr=0x%xl filesz=%d memsz=%d flags=0x%xi\n\r",
-              i, phdr->p_vaddr, (int)phdr->p_filesz, (int)phdr->p_memsz, phdr->p_flags);
-        
+                uint64_t flags = PTE_PRESENT | PTE_USER;
+        if (phdr->p_flags & 0x2) flags |= PTE_RW;
+        if (!(phdr->p_flags & 0x1)) flags |= PTE_NX;
         uint64_t seg_start = page_align_down(phdr->p_vaddr);
         uint64_t seg_end = page_align_up(phdr->p_vaddr + phdr->p_memsz);
-        
+        dbgln("ELF: Loading segment %d: vaddr=0x%xl filesz=%d memsz=%d flags=0x%xi\n\r",
+              i, phdr->p_vaddr, (int)phdr->p_filesz, (int)phdr->p_memsz, phdr->p_flags);
+
         // Allocate and map pages for this segment
         for (uint64_t vaddr = seg_start; vaddr < seg_end; vaddr += 4096) {
             // Check if page already allocated (segments can overlap)
@@ -169,7 +171,7 @@ static int elf_load_impl(const void* data, size_t size, elf_info_t* info, uint64
                 memset(page, 0, 4096);
                 
                 // Determine page flags - always RW for simplicity
-                uint64_t flags = PTE_PRESENT | PTE_USER | PTE_RW;
+                // uint64_t flags = PTE_PRESENT | PTE_USER | PTE_RW;
                 
                 // Map physical page to user virtual address in the specified page table
                 void* phys = phys_from_virt(page);

@@ -1,3 +1,4 @@
+#include "fs/devfs.h"
 #include <libk/string.h>
 #include <libk/utils.h>
 #include <drivers/framebuffer.h>
@@ -44,25 +45,12 @@ void init_tty() {
   
   
   for (int i = 0; i < TTY_NUM; ++i) {
-    tty_node = (inode_t*)kmalloc(sizeof(inode_t));  
-    memset(tty_node, 0, sizeof(inode_t));
-    tty_node->atime = 0;
-    tty_node->ctime = 0;
-    tty_node->is_directory = 0;
-    tty_node->type = FT_CHR;  // Character device
-    tty_node->size = 0;
-    tty_node->ino = 6000+i;
-    tty_node->f_ops = &tty_file_ops;
-    tty_node->mode = 6;
-    
-    char path[16] = "/dev/tty";
-    char id_str[2];
+    char name[16] = "tty";
+    char id_str[8];
     itoa(i, id_str, 10);
-    strcat(path, id_str);
-    
-    vfs_register_device(path, tty_node);
-    tty_node = NULL;
-    
+    strcat(name, id_str);
+    dbgln("Registering /dev/%s\n\r", name);
+    devfs_register_device(name, &tty_file_ops, FT_CHR);  
     ttys[i] = (tty_t) {
       .x_cursor = 0,
       .y_cursor = 0,

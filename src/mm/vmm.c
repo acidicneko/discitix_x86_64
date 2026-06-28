@@ -23,7 +23,7 @@ static uint64_t kernel_cr3 = 0;
 
 int init_vmm() {
     kernel_cr3 = read_cr3();
-    dbgln("VMM: initialized, kernel CR3 = 0x%llx\n\r", kernel_cr3);
+    dbgln("VMM: initialized, kernel CR3 = 0x%xl\n\r", kernel_cr3);
     return 0;
 }
 
@@ -226,7 +226,20 @@ void vmm_free_user_page_table(uint64_t cr3_phys) {
     pmm_free_pages(pml4, 1);
     dbgln("VMM: Freed user page table at phys 0x%llx\n\r", cr3_phys);
 }
-
+uint64_t vmm_get_pte(uint64_t cr3_phys, uint64_t vaddr) {
+    uint64_t *pml4 = virt_from_phys((void*)(cr3_phys & 0x000ffffffffff000ULL));
+    size_t i4 = (vaddr >> 39) & 0x1FF;
+    size_t i3 = (vaddr >> 30) & 0x1FF;
+    size_t i2 = (vaddr >> 21) & 0x1FF;
+    size_t i1 = (vaddr >> 12) & 0x1FF;
+    if (!(pml4[i4] & PTE_PRESENT)) return 0;
+    uint64_t *pdpt = virt_from_phys((void*)(pml4[i4] & 0x000ffffffffff000ULL));
+    if (!(pdpt[i3] & PTE_PRESENT)) return 0;
+    uint64_t *pd = virt_from_phys((void*)(pdpt[i3] & 0x000ffffffffff000ULL));
+    if (!(pd[i2] & PTE_PRESENT)) return 0;
+    uint64_t *pt = virt_from_phys((void*)(pd[i2] & 0x000ffffffffff000ULL));
+    return pt[i1];
+}
 uint64_t vmm_clone_user_page_table(uint64_t parent_cr3_phys) {
     uint64_t child_cr3_phys = vmm_create_user_page_table();
     if (!child_cr3_phys) return 0;

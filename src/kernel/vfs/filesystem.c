@@ -7,27 +7,30 @@
 static vfs_mount_t *mounts = NULL;
 static superblock_t *root_superblock = NULL;
 
-// only supports mounting at root for now
-
 int vfs_mount(superblock_t *sb, const char *mount_point) {
-	if (!sb || !mount_point) return -1;
+    if (!sb || !mount_point) return -1;
+    dbgln("VFS: mounting fs '%s' at '%s'\n\r", sb->fs_type, mount_point);
 
-	dbgln("VFS: mounting fs '%s' at '%s'\n\r", sb->fs_type, mount_point);
+    vfs_mount_t *m = (vfs_mount_t *)pmalloc(1);
+    if (!m) return -1;
+    memset(m, 0, sizeof(vfs_mount_t));
 
-	vfs_mount_t *m = (vfs_mount_t *)pmalloc(1);
-	if (!m) return -1;
-	memset(m, 0, sizeof(vfs_mount_t));
+    strncpy(m->mount_point, mount_point, NAME_MAX - 1);
+    m->sb = sb;
+    m->next = mounts;
+    mounts = m;
 
-	strncpy(m->mount_point, mount_point, NAME_MAX - 1);
-	m->sb = sb;
-	m->next = mounts;
-	mounts = m;
-
-	if (mount_point[0] == '/' && mount_point[1] == '\0') {
-		root_superblock = sb;
-	}
-
-	return 0;
+    if (mount_point[0] == '/' && mount_point[1] == '\0') {
+        root_superblock = sb;
+    } else {
+        dentry_t *mnt_dentry = vfs_get_dentry(mount_point);
+        if (mnt_dentry) {
+            mnt_dentry->mounted_here = m; 
+            sb->root->parent = mnt_dentry->parent;
+            strncpy(sb->root->name, mnt_dentry->name, NAME_MAX - 1);
+        }
+    }
+    return 0;
 }
 
 int vfs_lookup(inode_t *parent, const char *name, inode_t **result_inode) {
@@ -46,77 +49,14 @@ int vfs_lookup(inode_t *parent, const char *name, inode_t **result_inode) {
     return 0;
 }
 
-
 int vfs_lookup_path(const char *path, inode_t **result_inode) {
-	if (!path || !result_inode) return -1;
-
-	if (!root_superblock || !root_superblock->root || !root_superblock->root->inode) {
-		return -1;
-	}
-
-	// Determine starting point: absolute path starts from root, relative from cwd
-	dentry_t *current_dentry;
-	if (path[0] == '/') {
-		current_dentry = root_superblock->root;
-	} else {
-		// Get cwd from current task
-		task_t *task = get_current_task();
-		if (task && task->cwd) {
-			current_dentry = (dentry_t *)task->cwd;
-		} else {
-			current_dentry = root_superblock->root;
-		}
-	}
-
-	inode_t *current_inode = current_dentry->inode;
-
-	char path_copy[PATH_MAX];
-	strncpy(path_copy, path, PATH_MAX - 1);
-	path_copy[PATH_MAX - 1] = '\0';
-
-	char *token = strtok(path_copy, "/");
-	while (token) {
-		if (!current_inode->is_directory) {
-			return -1;
-		}
-
-		// Handle special entries
-		if (strcmp(token, ".") == 0) {
-			// Stay in current directory
-			token = strtok(NULL, "/");
-			continue;
-		} else if (strcmp(token, "..") == 0) {
-			// Go to parent directory
-			if (current_dentry->parent) {
-				current_dentry = current_dentry->parent;
-				current_inode = current_dentry->inode;
-			}
-			// If no parent, stay at root
-			token = strtok(NULL, "/");
-			continue;
-		}
-
-		inode_t *next_inode = NULL;
-		if (vfs_lookup(current_inode, token, &next_inode) != 0) {
-			return -1;
-		}
-
-		// Update current_dentry to match
-		dentry_t *child = current_dentry->children;
-		while (child) {
-			if (!strcmp(child->name, token)) {
-				current_dentry = child;
-				break;
-			}
-			child = child->next;
-		}
-
-		current_inode = next_inode;
-		token = strtok(NULL, "/");
-	}
-
-	*result_inode = current_inode;
-	return 0;
+    if (!path || !result_inode) return -1;
+    
+    dentry_t *d = vfs_get_dentry(path);
+    if (!d) return -1;
+    
+    *result_inode = d->inode;
+    return 0;
 }
 
 superblock_t *vfs_get_root_superblock() {
@@ -143,73 +83,6 @@ static inode_operations_t vfs_dir_iops = {
 	.mkdir = NULL,
 	.unlink = NULL,
 };
-
-// Get the dentry for a given path
-dentry_t *vfs_get_dentry(const char *path) {
-	if (!path) return NULL;
-
-	if (!root_superblock || !root_superblock->root) {
-		return NULL;
-	}
-
-	// Root directory case
-	if (path[0] == '/' && path[1] == '\0') {
-		return root_superblock->root;
-	}
-
-	// Determine starting point
-	dentry_t *current;
-	if (path[0] == '/') {
-		current = root_superblock->root;
-	} else {
-		task_t *task = get_current_task();
-		if (task && task->cwd) {
-			current = (dentry_t *)task->cwd;
-		} else {
-			current = root_superblock->root;
-		}
-	}
-
-	char path_copy[PATH_MAX];
-	strncpy(path_copy, path, PATH_MAX - 1);
-	path_copy[PATH_MAX - 1] = '\0';
-
-	char *token = strtok(path_copy, "/");
-	while (token) {
-		if (!current->inode || !current->inode->is_directory) {
-			return NULL;
-		}
-
-		// Handle . and ..
-		if (strcmp(token, ".") == 0) {
-			token = strtok(NULL, "/");
-			continue;
-		} else if (strcmp(token, "..") == 0) {
-			if (current->parent) {
-				current = current->parent;
-			}
-			token = strtok(NULL, "/");
-			continue;
-		}
-
-		// Search in children
-		dentry_t *child = current->children;
-		dentry_t *found = NULL;
-		while (child) {
-			if (!strcmp(child->name, token)) {
-				found = child;
-				break;
-			}
-			child = child->next;
-		}
-
-		if (!found) return NULL;
-		current = found;
-		token = strtok(NULL, "/");
-	}
-
-	return current;
-}
 
 // Create a directory at a given parent inode
 int vfs_mkdir_at(inode_t *parent, const char *name) {
@@ -257,47 +130,57 @@ int vfs_mkdir_at(inode_t *parent, const char *name) {
 	dbgln("VFS: created directory '%s'\n\r", name);
 	return 0;
 }
-
-// Create a directory at an absolute path
 int vfs_mkdir(const char *path) {
-	if (!path || path[0] != '/') return -1;
+    if (!path) return -1;
 
-	if (!root_superblock || !root_superblock->root || !root_superblock->root->inode) {
-		return -1;
-	}
+    char path_copy[PATH_MAX];
+    strncpy(path_copy, path, PATH_MAX - 1);
+    path_copy[PATH_MAX - 1] = '\0';
 
-	char path_copy[PATH_MAX];
-	strncpy(path_copy, path, PATH_MAX - 1);
-	path_copy[PATH_MAX - 1] = '\0';
+    // Find parent directory and target folder name
+    char *last_slash = NULL;
+    for (int i = strlen(path_copy) - 1; i >= 0; i--) {
+        if (path_copy[i] == '/') {
+            last_slash = &path_copy[i];
+            break;
+        }
+    }
 
-	// Find parent directory and target name
-	char *last_slash = NULL;
-	for (int i = strlen(path_copy) - 1; i >= 0; i--) {
-		if (path_copy[i] == '/') {
-			last_slash = &path_copy[i];
-			break;
-		}
-	}
+    char *dir_name = path_copy;
+    dentry_t *parent_dentry = NULL;
 
-	if (!last_slash) return -1;
+    if (last_slash) {
+        *last_slash = '\0';
+        dir_name = last_slash + 1;
+        if (*dir_name == '\0') return -1; // Path ends with an invalid trailing '/'
 
-	char *dir_name = last_slash + 1;
-	if (*dir_name == '\0') return -1; // Path ends with /
+        if (last_slash == path_copy) {
+            // Absolute path in root (e.g., "/test")
+            parent_dentry = vfs_get_root_dentry();
+        } else {
+            // Absolute nested path (e.g., "/hdd/folders/test")
+            parent_dentry = vfs_get_dentry(path_copy);
+        }
+    } else {
+        // --- RELATIVE PATH HANDLING ---
+        // Path is just "test". Extract the Current Working Directory of the process!
+        task_t *task = get_current_task();
+        parent_dentry = (task && task->cwd) ? (dentry_t *)task->cwd : vfs_get_root_dentry();
+    }
 
-	inode_t *parent_inode;
-	if (last_slash == path_copy) {
-		// Creating in root directory
-		parent_inode = root_superblock->root->inode;
-	} else {
-		*last_slash = '\0';
-		if (vfs_lookup_path(path_copy, &parent_inode) != 0) {
-			return -1;
-		}
-	}
+    if (!parent_dentry || !parent_dentry->inode) {
+        return -1;
+    }
+    dbgln("DEBUG vfs_mkdir: Attempting to create '%s' inside folder '%s'", dir_name, parent_dentry->name);
+    // --- VFS ROUTING ENGINE ---
+    // If the underlying filesystem driver provides a specialized mkdir hook (like FAT32), use it!
+    if (parent_dentry->inode->i_ops && parent_dentry->inode->i_ops->mkdir) {
+        return parent_dentry->inode->i_ops->mkdir(parent_dentry->inode, dir_name);
+    }
 
-	return vfs_mkdir_at(parent_inode, dir_name);
+    // Fall back to virtual RAM-backed structure for stripFS, /dev, /proc, etc.
+    return vfs_mkdir_at(parent_dentry->inode, dir_name);
 }
-
 // Register a device at a given path
 int vfs_register_device(const char *path, inode_t *device_inode) {
 	if (!path || !device_inode || path[0] != '/') return -1;
@@ -374,35 +257,18 @@ dentry_t *vfs_get_root_dentry(void) {
 	return root_superblock->root;
 }
 
-// Change current working directory
 int vfs_chdir(const char *path) {
-	if (!path) return -1;
+    if (!path) return -1;
+    task_t *task = get_current_task();
+    if (!task) return -1;
 
-	task_t *task = get_current_task();
-	if (!task) return -1;
+    dentry_t *dentry = vfs_get_dentry(path);
+    if (!dentry || !dentry->inode->is_directory) return -1;
 
-	// Look up the path
-	inode_t *inode = NULL;
-	if (vfs_lookup_path(path, &inode) != 0 || !inode) {
-		return -1;
-	}
-
-	// Must be a directory
-	if (!inode->is_directory) {
-		return -1;
-	}
-
-	// Get the dentry for this path
-	dentry_t *dentry = vfs_get_dentry(path);
-	if (!dentry) {
-		return -1;
-	}
-
-	task->cwd = (void *)dentry;
-	return 0;
+    task->cwd = (void *)dentry;
+    return 0;
 }
 
-// Get current working directory path
 int vfs_getcwd(char *buf, size_t size) {
 	if (!buf || size == 0) return -1;
 
@@ -441,4 +307,120 @@ int vfs_getcwd(char *buf, size_t size) {
 
 	memcpy((uint8_t*)buf, (uint8_t*)&tmp[pos], len);
 	return 0;
+}
+
+dentry_t *vfs_get_dentry(const char *path) {
+    if (!path || !root_superblock || !root_superblock->root) return NULL;
+    if (strcmp(path, "/") == 0) return root_superblock->root;
+
+    dentry_t *current;
+    if (path[0] == '/') {
+        current = root_superblock->root;
+    } else {
+        task_t *task = get_current_task();
+        current = (task && task->cwd) ? (dentry_t *)task->cwd : root_superblock->root;
+    }
+
+    char path_copy[PATH_MAX];
+    strncpy(path_copy, path, PATH_MAX - 1);
+    path_copy[PATH_MAX - 1] = '\0';
+
+    char *token = strtok(path_copy, "/");
+    while (token) {
+        if (!current->inode || !current->inode->is_directory) return NULL;
+
+        if (strcmp(token, ".") == 0) {
+            token = strtok(NULL, "/");
+            continue;
+        } else if (strcmp(token, "..") == 0) {
+            if (current->parent) current = current->parent;
+            token = strtok(NULL, "/");
+            continue;
+        }
+
+        // 1. Search the RAM Cache
+        dentry_t *child = current->children;
+        dentry_t *found = NULL;
+        while (child) {
+            if (!strcmp(child->name, token)) {
+                found = child;
+                break;
+            }
+            child = child->next;
+        }
+
+        // 2. Dynamic Dentry Creation (Crucial for FAT32!)
+        // If it's not in RAM, ask the disk driver to find it
+        if (!found) {
+            inode_t *next_inode = NULL;
+            if (vfs_lookup(current->inode, token, &next_inode) != 0 || !next_inode) {
+                return NULL; // File genuinely doesn't exist
+            }
+
+            // The driver found it! Cache it in RAM as a new Dentry
+            found = (dentry_t *)pmalloc(1);
+            memset(found, 0, sizeof(dentry_t));
+            strncpy(found->name, token, NAME_MAX - 1);
+            found->inode = next_inode;
+            found->parent = current;
+            
+            found->next = current->children;
+            current->children = found;
+        }
+
+        current = found;
+
+        // 3. POSIX MOUNT TRAVERSAL (The Magic)
+        // If we step onto a "Covered Dentry", instantly fall through the portal!
+        if (current->mounted_here) {
+            current = current->mounted_here->sb->root;
+        }
+
+        token = strtok(NULL, "/");
+    }
+
+    return current;
+}
+
+int vfs_unlink(const char *path) {
+    if (!path) return -1;
+
+    char path_copy[PATH_MAX];
+    strncpy(path_copy, path, PATH_MAX - 1);
+    path_copy[PATH_MAX - 1] = '\0';
+
+    char *last_slash = NULL;
+    for (int i = strlen(path_copy) - 1; i >= 0; i--) {
+        if (path_copy[i] == '/') {
+            last_slash = &path_copy[i];
+            break;
+        }
+    }
+
+    char *file_name = path_copy;
+    dentry_t *parent_dentry = NULL;
+
+    if (last_slash) {
+        *last_slash = '\0';
+        file_name = last_slash + 1;
+        if (*file_name == '\0') return -1;
+
+        if (last_slash == path_copy) {
+            parent_dentry = vfs_get_root_dentry();
+        } else {
+            parent_dentry = vfs_get_dentry(path_copy);
+        }
+    } else {
+        task_t *task = get_current_task();
+        parent_dentry = (task && task->cwd) ? (dentry_t *)task->cwd : vfs_get_root_dentry();
+    }
+
+    if (!parent_dentry || !parent_dentry->inode) return -1;
+
+    // Route to the hardware driver!
+    if (parent_dentry->inode->i_ops && parent_dentry->inode->i_ops->unlink) {
+        return parent_dentry->inode->i_ops->unlink(parent_dentry->inode, file_name);
+    }
+
+    return -1; // Or implement virtual RAM-disk deletion here if you want
 }

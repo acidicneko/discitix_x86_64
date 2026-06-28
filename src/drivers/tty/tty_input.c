@@ -186,7 +186,7 @@ long tty_read(file_t* file, void* buf, size_t len, uint64_t off) {
     return -1;
   }
   
-  tty_t* tty = &ttys[file->inode->ino - 6000];
+  tty_t* tty = &ttys[file->inode->ino - 1000];
   char* dest = (char*)buf;
   size_t bytes_read = 0;
   

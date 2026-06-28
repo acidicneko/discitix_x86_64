@@ -8,7 +8,6 @@
 #include <mm/liballoc.h>
 #include <stdint.h>
 #include <stddef.h>
-#include <sys/types.h>
 
 uint64_t initrd_location_strip = 0;
 strip_fs_header_t *header_strip = NULL;
@@ -24,7 +23,7 @@ long stripfs_file_read(file_t *f, void *buf, size_t len, uint64_t off) {
     uint8_t *src = (uint8_t *)(initrd_location_strip + meta->offset + off);
     memcpy(buf, src, to_read);
     f->offset += to_read;
-    return (ssize_t)to_read;
+    return (size_t)to_read;
 }
 
 inode_t *stripfs_dir_lookup(inode_t *parent, const char *name) {
@@ -52,6 +51,7 @@ static inode_operations_t stripfs_dir_iops = {
   .create = NULL,
   .mkdir = NULL,
   .unlink = NULL,
+  .getdents = stripfs_dir_getdents,
 };
 
 
@@ -95,7 +95,7 @@ int stripfs_create_and_mount() {
           continue;
       }
       memset(inode, 0, sizeof(inode_t));
-      inode->ino = ino_counter++;
+      inode->ino = 9000+ino_counter++;
       inode->size = (uint32_t)filemeta->length;
       inode->is_directory = 0;
       inode->type = FT_REG;
@@ -152,4 +152,46 @@ void init_initrd_stripFS() {
   }
 }
 
+// Your exact logic, just accepting the offset pointer!
+long stripfs_dir_getdents(inode_t *inode, uint64_t *offset, void *buf_ptr, uint32_t count) {
+    dentry_t *dir_dentry = (dentry_t*)inode->private;
+    if (!dir_dentry) return -1;
+    
+    char *buf = (char*)buf_ptr;
+    size_t pos = 0;
+    
+    // Skip to the current offset
+    dentry_t *child = dir_dentry->children;
+    uint64_t skip = *offset; 
+    while (child && skip > 0) {
+        child = child->next;
+        skip--;
+    }
+    
+    // Fill buffer with directory entries
+    while (child && pos < count) {
+        size_t name_len = strlen(child->name);
+        size_t reclen = (sizeof(struct linux_dirent64) + name_len + 1 + 7) & ~7;
+        
+        if (pos + reclen > count) break; 
+        
+        struct linux_dirent64 *dirent = (struct linux_dirent64*)(buf + pos);
+        dirent->d_ino = child->inode ? child->inode->ino : 0;
+        dirent->d_off = *offset + 1;
+        dirent->d_reclen = (uint16_t)reclen;
+        
+        if (child->inode && child->inode->type != 0) {
+            dirent->d_type = child->inode->type;
+        } else {
+            dirent->d_type = (child->inode && child->inode->is_directory) ? DT_DIR : DT_REG;
+        }
+        memcpy((uint8_t*)dirent->d_name, (const uint8_t*)child->name, name_len + 1);
+        
+        pos += reclen;
+        (*offset)++; // Increment the file offset for the next syscall
+        child = child->next;
+    }
+    
+    return (int64_t)pos;
+}
 

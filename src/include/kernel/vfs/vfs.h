@@ -50,6 +50,7 @@ typedef struct dentry {
     struct dentry *parent;
     struct dentry *next;      // sibling entries (files/dirs in same directory)
     struct dentry *children;  // first child (for directories)
+    struct vfs_mount *mounted_here;
 } dentry_t;
 
 struct inode_operations {
@@ -57,6 +58,7 @@ struct inode_operations {
     int (*create)(inode_t*, const char*, uint32_t);
     int (*mkdir)(inode_t*, const char*);
     int (*unlink)(inode_t*, const char*);
+    long (*getdents)(inode_t *dir_inode, uint64_t *offset, void *buf, uint32_t count);
 };
 
 struct file {
@@ -85,6 +87,26 @@ typedef struct vfs_mount {
 	struct vfs_mount *next;
 } vfs_mount_t;
 
+#define S_IFDIR  0040000
+#define S_IFREG  0100000
+#define S_IFCHR  0020000
+#define S_IFBLK  0060000
+#define S_IFLNK  0120000
+#define S_IFIFO  0010000
+#define S_IFSOCK 0140000
+
+struct linux_dirent64 {
+    uint64_t d_ino;      // Inode number
+    int64_t  d_off;      // Offset to next dirent
+    uint16_t d_reclen;   // Length of this dirent
+    uint8_t  d_type;     // File type
+    char     d_name[];   // Filename (null-terminated)
+};
+
+#define DT_UNKNOWN 0
+#define DT_REG     8   // Regular file
+#define DT_DIR     4   // Directory
+
 
 // File related operations
 int vfs_open(file_t **file, inode_t *inode, uint32_t flags);
@@ -99,12 +121,12 @@ int vfs_mount(superblock_t *sb, const char *mount_point);
 superblock_t *vfs_get_root_superblock();
 int vfs_lookup(inode_t *parent, const char *name, inode_t **result_inode);
 int vfs_lookup_path(const char *path, inode_t **result_inode);
-
+int vfs_create(const char *path, uint32_t mode);
 // Directory operations
 int vfs_mkdir(const char *path);
 int vfs_mkdir_at(inode_t *parent, const char *name);
 dentry_t *vfs_get_dentry(const char *path);
-
+int vfs_unlink(const char *path);
 // Device registration
 int vfs_register_device(const char *path, inode_t *device_inode);
 
@@ -112,5 +134,5 @@ int vfs_register_device(const char *path, inode_t *device_inode);
 int vfs_chdir(const char *path);
 int vfs_getcwd(char *buf, size_t size);
 dentry_t *vfs_get_root_dentry(void);
-
+dentry_t *vfs_get_dentry(const char *path);
 #endif /* __VFS_H__ */
