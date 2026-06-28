@@ -1,9 +1,9 @@
-APP = cat
+APP = ls
 
 CC = x86_64-linux-gnu-gcc
 
 CFLAGS += \
-		-I../../include \
+		-I../../usr/include \
 		-nostdlib \
 		-ffreestanding \
 		-mno-red-zone \
@@ -12,7 +12,7 @@ CFLAGS += \
 		-Wa,--noexecstack
 
 LDFLAGS += \
-		-L../../lib \
+		-L../../usr/lib \
 		-T ../linker.ld \
 		-nostdlib \
 		-static \
@@ -22,12 +22,12 @@ LDFLAGS += \
 SRCS := $(wildcard src/*.c)
 OBJS := $(SRCS:.c=.o)
 
-RUNTIME = ../../lib/crt.o ../../lib/stubs.o
+RUNTIME = ../../usr/lib/crt0.o
 
 all: $(APP)
 
 $(APP): $(OBJS)
-	$(CC) $(LDFLAGS) $(RUNTIME) $(OBJS) -lc -o $@ 
+	$(CC) $(LDFLAGS) $(RUNTIME) $(OBJS) -lc -o ../build/$@ 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 

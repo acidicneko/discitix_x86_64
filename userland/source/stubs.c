@@ -29,6 +29,8 @@ extern int errno;
 #define SYS_FSTAT      14
 #define SYS_CHDIR      15
 #define SYS_GETCWD     16
+#define SYS_MKDIR      17
+#define SYS_UNLINK     18
 
 static inline long _syscall0(long num) {
     long ret;
@@ -282,11 +284,6 @@ int link(char *old, char *new) {
     return -1;
 }
 
-int unlink(char *name) {
-    errno = ENOENT;
-    return -1;
-}
-
 clock_t times(struct tms *buf) {
     return (clock_t)-1;
 }
@@ -390,3 +387,20 @@ int closedir(DIR *dirp) {
     return ret;
 }
 
+int mkdir(const char *path, mode_t mode) {
+    long ret = _syscall6(SYS_MKDIR, (long)path, mode, 0, 0, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
+}
+
+int unlink(const char *name) {
+    long ret = _syscall6(SYS_UNLINK, (long)name, 0, 0, 0, 0, 0); // Use your SYS_UNLINK number
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+    return 0;
+}

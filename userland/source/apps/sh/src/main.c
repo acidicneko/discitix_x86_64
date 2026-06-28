@@ -120,7 +120,7 @@ int main(void)
         /* external command */
 
         char path[128];
-        snprintf(path, sizeof(path), "/%s", argv[0]);
+        snprintf(path, sizeof(path), "/bin/%s", argv[0]);
 
         pid_t pid = fork();
 
