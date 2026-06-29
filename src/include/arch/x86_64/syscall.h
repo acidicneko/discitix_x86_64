@@ -24,6 +24,7 @@
 #define SYS_GETCWD      16
 #define SYS_MKDIR       17
 #define SYS_UNLINK      18
+#define SYS_LSEEK       19
 
 
 #define MAX_SYSCALLS 32
@@ -89,4 +90,7 @@ int64_t sys_mkdir(uint64_t path_ptr, uint64_t mode, uint64_t arg3,
                   uint64_t arg4, uint64_t arg5, uint64_t arg6);
 int64_t sys_unlink(uint64_t path_ptr, uint64_t arg2, uint64_t arg3,
                    uint64_t arg4, uint64_t arg5, uint64_t arg6);
+int64_t sys_lseek(uint64_t fd, uint64_t offset, uint64_t whence,
+                  uint64_t arg4, uint64_t arg5, uint64_t arg6);
+
 #endif

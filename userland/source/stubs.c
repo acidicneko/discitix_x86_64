@@ -31,6 +31,7 @@ extern int errno;
 #define SYS_GETCWD     16
 #define SYS_MKDIR      17
 #define SYS_UNLINK     18
+#define SYS_LSEEK      19
 
 static inline long _syscall0(long num) {
     long ret;
@@ -270,9 +271,6 @@ int isatty(int file) {
     return 0;
 }
 
-int lseek(int file, int ptr, int dir) {
-    return 0;
-}
 
 int kill(int pid, int sig) {
     errno = EINVAL;
@@ -403,4 +401,16 @@ int unlink(const char *name) {
         return -1;
     }
     return 0;
+}
+
+
+off_t lseek(int fd, off_t offset, int whence) {
+    int64_t ret = _syscall3(SYS_LSEEK, (uint64_t)fd, (uint64_t)offset, (uint64_t)whence);
+
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return (off_t)ret;
 }

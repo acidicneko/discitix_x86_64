@@ -304,3 +304,52 @@ int64_t sys_unlink(uint64_t path_ptr, uint64_t arg2, uint64_t arg3,
     }
     return 0;
 }
+
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
+#define EINVAL 22
+
+int64_t sys_lseek(uint64_t fd, uint64_t offset, uint64_t whence,
+                  uint64_t arg4, uint64_t arg5, uint64_t arg6) {
+    (void)arg4; (void)arg5; (void)arg6;
+    
+    task_t *current = get_current_task();
+    if (!current) return -1;
+    
+    if (fd >= MAX_FDS || !current->fd_table[fd]) {
+        return -1;
+    }
+    
+    file_t *f = current->fd_table[fd];
+    int64_t new_offset = f->offset;
+    
+    switch (whence) {
+        case SEEK_SET:
+            new_offset = (int64_t)offset;
+            break;
+        case SEEK_CUR:
+            new_offset += (int64_t)offset;
+            break;
+        case SEEK_END:
+            if (f->inode) {
+                new_offset = f->inode->size + (int64_t)offset;
+            } else {
+                return -EINVAL;
+            }
+            break;
+        default:
+            return -EINVAL;
+    }
+    
+    // Prevent seeking before the start of the file
+    if (new_offset < 0) {
+        return -EINVAL;
+    }
+    
+    // Update the file descriptor's offset
+    f->offset = (uint32_t)new_offset;
+    
+    dbgln("sys_lseek: fd %d moved to offset %ul\n\r", fd, f->offset);
+    return new_offset;
+}
