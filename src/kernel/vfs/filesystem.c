@@ -1,6 +1,7 @@
 #include <kernel/vfs/vfs.h>
 #include <kernel/sched/scheduler.h>
 #include <libk/utils.h>
+#include <mm/liballoc.h>
 #include <libk/string.h>
 #include <mm/pmm.h>
 
@@ -381,46 +382,56 @@ dentry_t *vfs_get_dentry(const char *path) {
 
     return current;
 }
-
 int vfs_unlink(const char *path) {
     if (!path) return -1;
-
     char path_copy[PATH_MAX];
     strncpy(path_copy, path, PATH_MAX - 1);
     path_copy[PATH_MAX - 1] = '\0';
 
     char *last_slash = NULL;
     for (int i = strlen(path_copy) - 1; i >= 0; i--) {
-        if (path_copy[i] == '/') {
-            last_slash = &path_copy[i];
-            break;
-        }
+        if (path_copy[i] == '/') { last_slash = &path_copy[i]; break; }
     }
 
     char *file_name = path_copy;
     dentry_t *parent_dentry = NULL;
-
     if (last_slash) {
         *last_slash = '\0';
         file_name = last_slash + 1;
         if (*file_name == '\0') return -1;
-
-        if (last_slash == path_copy) {
-            parent_dentry = vfs_get_root_dentry();
-        } else {
-            parent_dentry = vfs_get_dentry(path_copy);
-        }
+        parent_dentry = (last_slash == path_copy) ? vfs_get_root_dentry() : vfs_get_dentry(path_copy);
     } else {
         task_t *task = get_current_task();
         parent_dentry = (task && task->cwd) ? (dentry_t *)task->cwd : vfs_get_root_dentry();
     }
 
     if (!parent_dentry || !parent_dentry->inode) return -1;
+    if (!parent_dentry->inode->i_ops || !parent_dentry->inode->i_ops->unlink) return -1;
 
-    // Route to the hardware driver!
-    if (parent_dentry->inode->i_ops && parent_dentry->inode->i_ops->unlink) {
-        return parent_dentry->inode->i_ops->unlink(parent_dentry->inode, file_name);
+    int result = parent_dentry->inode->i_ops->unlink(parent_dentry->inode, file_name);
+    if (result != 0) return result;
+
+    // Evict the stale dentry (and its inode) from the in-RAM cache so the
+    // next lookup for this name is forced back to the disk driver instead
+    // of returning a pointer to a since-deleted inode/cluster.
+    dentry_t *prev = NULL;
+    dentry_t *child = parent_dentry->children;
+    while (child) {
+        if (!strcmp(child->name, file_name)) {
+            if (prev) prev->next = child->next;
+            else parent_dentry->children = child->next;
+
+            if (child->inode) {
+                if (child->inode->private) kfree(child->inode->private); // fat32_node_info_t
+                kfree(child->inode);
+            }
+            kfree(child);
+            break;
+        }
+        prev = child;
+        child = child->next;
     }
 
-    return -1; // Or implement virtual RAM-disk deletion here if you want
+    return 0;
 }
+

@@ -20,5 +20,6 @@ char *strcat(char *d, const char *s);
 const char *strchr(const char *s, char ch);
 char *strtok(char *s, const char *delim);
 char toupper(char c);
+int islower(int c);
 
 #endif

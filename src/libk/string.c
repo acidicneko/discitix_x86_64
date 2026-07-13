@@ -223,3 +223,7 @@ char toupper(char c)
         return c - ('a' - 'A');
     return c;
 }
+
+int islower(int c) {
+    return (c >= 'a' && c <= 'z');
+}

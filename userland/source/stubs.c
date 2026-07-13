@@ -97,8 +97,10 @@ struct kernel_stat {
 static void _translate_stat(struct stat *dst, struct kernel_stat *src) {
     dst->st_ino     = src->st_ino;
     dst->st_mode    = src->st_mode;
-    dst->st_uid     = src->st_uid;
-    dst->st_gid     = src->st_gid;
+    // dst->st_uid     = src->st_uid;
+    // dst->st_gid     = src->st_gid;
+    dst->st_uid = 0; //FIXME: For now we eemulate root for userspace
+    dst->st_gid = 0; 
     dst->st_size    = src->st_size;
     
     // Assign explicitly to Newlib's inner struct timespec fields
@@ -414,3 +416,27 @@ off_t lseek(int fd, off_t offset, int whence) {
 
     return (off_t)ret;
 }
+
+
+
+int gettimeofday(struct timeval *restrict tv, void *restrict tz) {
+    if (tv) {
+        tv->tv_sec = 0;  
+        tv->tv_usec = 0;
+    }
+    return 0;
+}
+
+// Needed to satisfy the Newlib/CRT destructor hooks since we dropped crtn.o
+void _fini(void) {
+    // Intentionally blank
+}
+
+pid_t wait(int *wstatus) {
+    return waitpid(-1, wstatus, 0);
+}
+
+int getuid(void) { return 0; }
+int geteuid(void) { return 0; }
+int getgid(void) { return 0; }
+int getegid(void) { return 0; }

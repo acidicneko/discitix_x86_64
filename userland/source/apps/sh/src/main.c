@@ -120,7 +120,16 @@ int main(void)
         /* external command */
 
         char path[128];
-        snprintf(path, sizeof(path), "/bin/%s", argv[0]);
+        
+        // Check if the user is explicitly invoking a local binary (e.g., ./a.out)
+        // Also checks if the path is absolute (starts with /)
+        if ((strncmp(argv[0], "./", 2) == 0) || (argv[0][0] == '/')) {
+            // Use the path exactly as the user typed it
+            snprintf(path, sizeof(path), "%s", argv[0]);
+        } else {
+            // Otherwise, look for it in the standard /bin/ fallback directory
+            snprintf(path, sizeof(path), "/bin/%s", argv[0]);
+        }
 
         pid_t pid = fork();
 

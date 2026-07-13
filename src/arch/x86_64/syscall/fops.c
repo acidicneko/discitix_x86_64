@@ -79,7 +79,7 @@ int64_t sys_read(uint64_t fd, uint64_t buf, uint64_t count,
 int64_t sys_open(uint64_t path_ptr, uint64_t flags, uint64_t mode,
                  uint64_t arg4, uint64_t arg5, uint64_t arg6) {
     (void)mode; (void)arg4; (void)arg5; (void)arg6;
-    dbgln("DEBUG sys_open: path='%s', flags=0x%xl (decimal %d)", (const char*)path_ptr, flags, flags);
+    dbgln("DEBUG sys_open: path='%s', flags=0x%xl (decimal %d)\n\r", (const char*)path_ptr, flags, flags);
     const char *path = (const char*)path_ptr;
     task_t *current = get_current_task();
     
@@ -93,7 +93,7 @@ int64_t sys_open(uint64_t path_ptr, uint64_t flags, uint64_t mode,
             break;
         }
     }
-    
+    dbgln("sys_open: found free fd %d\n\r", fd); 
     if (fd < 0) {
         dbgln("sys_open: no free fd\n\r");
         return -1;  // No free file descriptors
@@ -114,7 +114,7 @@ int64_t sys_open(uint64_t path_ptr, uint64_t flags, uint64_t mode,
             return -ENOENT; 
         }
     } 
-    
+    dbgln("sys_open: found the inode!\n\r"); 
     file_t *f = NULL;
     if (vfs_open(&f, inode, (uint32_t)flags) != 0 || !f) {
         dbgln("sys_open: vfs_open failed\n\r");

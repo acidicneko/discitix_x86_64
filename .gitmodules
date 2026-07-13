@@ -8,3 +8,6 @@
 [submodule "tcc_discitix"]
 	path = tcc_discitix
 	url = https://github.com/acidicneko/tcc_discitix.git
+[submodule "lua"]
+	path = lua
+	url = https://github.com/lua/lua.git
