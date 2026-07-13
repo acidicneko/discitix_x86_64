@@ -36,7 +36,7 @@ static int parse_args(char *line, char *argv[])
     return argc;
 }
 
-static void print_prompt(void)
+static void print_prompt(int status)
 {
     char cwd[128];
 
@@ -46,7 +46,10 @@ static void print_prompt(void)
         printf("%s", cwd);
     else
         printf("?");
-
+    
+    if(status!=0){
+      printf("\033[1;31m");
+    }
     printf(" $ \033[0m");
     fflush(stdout);
 }
@@ -55,12 +58,12 @@ int main(void)
 {
     char line[MAX_LINE];
     char *argv[MAX_ARGS];
-
+    int status;
     puts("Simple Shell");
     puts("Type 'help' for commands");
 
     while (1) {
-        print_prompt();
+        print_prompt(status);
 
         if (!fgets(line, sizeof(line), stdin))
             break;
@@ -148,7 +151,7 @@ int main(void)
             _exit(127);
         }
 
-        int status;
+        
         waitpid(pid, &status, 0);
     }
 

@@ -428,9 +428,9 @@ int gettimeofday(struct timeval *restrict tv, void *restrict tz) {
 }
 
 // Needed to satisfy the Newlib/CRT destructor hooks since we dropped crtn.o
-void _fini(void) {
-    // Intentionally blank
-}
+// void _fini(void) {
+//     // Intentionally blank
+// }
 
 pid_t wait(int *wstatus) {
     return waitpid(-1, wstatus, 0);
