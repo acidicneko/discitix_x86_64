@@ -350,6 +350,5 @@ int64_t sys_lseek(uint64_t fd, uint64_t offset, uint64_t whence,
     // Update the file descriptor's offset
     f->offset = (uint32_t)new_offset;
     
-    dbgln("sys_lseek: fd %d moved to offset %ul\n\r", fd, f->offset);
     return new_offset;
 }
