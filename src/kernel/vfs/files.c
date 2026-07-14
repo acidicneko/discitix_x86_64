@@ -1,4 +1,3 @@
-#include "libk/utils.h"
 #include <kernel/vfs/vfs.h>
 #include <libk/string.h>
 #include <kernel/sched/scheduler.h>
@@ -28,7 +27,6 @@ long vfs_read(file_t *file, void *buf, size_t len) {
     if (!file || !file->inode) return -1;
     if (!file->inode->f_ops || 
         !file->inode->f_ops->read) return -1;
-    dbgln("Calling read of inode!\n\r");
     long ret = file->inode->f_ops->read(
         file,
         buf,

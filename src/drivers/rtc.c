@@ -107,7 +107,7 @@ void rtc_print_time(void) {
 
 void rtc_init(void) {
     irq_install_handler(8, rtc_irq_handler);
-    dbgln("RTC initialized with IRQ8\n\r");
+    log("RTC", INFO, "initialized with IRQ8\n\r");
 }
 
 uint64_t get_unix_epoch(){

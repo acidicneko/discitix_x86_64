@@ -195,5 +195,5 @@ char keyboard_read(){               /*reads a single character from keyboard*/
 
 void keyboard_install(void){        /*keyboard installer function*/
   irq_install_handler(1, keyboard_handler); /*register the handler for IRQ1, keyboard IRQ*/
-  dbgln("Keyboard initialised\n\r");
+  log("KBD",INFO,"Keyboard initialised\n\r");
 }

@@ -202,7 +202,7 @@ int64_t sys_mmap(uint64_t addr, uint64_t length, uint64_t prot,
         return -EINVAL;
 
     if (!(flags & MAP_ANONYMOUS)) {
-        dbgln("sys_mmap: file-backed mappings not yet supported\n\r");
+        log("SYS_MMAP", ERROR ,"file-backed mappings not yet supported\n\r");
         return -ENOSYS;
     }
 
@@ -239,7 +239,7 @@ int64_t sys_mmap(uint64_t addr, uint64_t length, uint64_t prot,
     if (ret != 0)
         return ret;   /* -ENOMEM, with all partial pages already cleaned up */
 
-    dbgln("sys_mmap: mapped %zu pages at 0x%llx\n\r", num_pages, vaddr);
+    log("SYS_MMAP",INFO, "mapped %ul pages at 0x%xl\n\r", num_pages, vaddr);
     return (int64_t)vaddr;
 }
 

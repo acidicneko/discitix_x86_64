@@ -76,5 +76,5 @@ long serial_write(file_t* file, const void* buf, size_t count, uint64_t off){
 
 void init_serial_device(){
     devfs_register_device("sr0", &serial_file_ops, FT_CHR); 
-    dbgln("Serial: Registered /dev/sr0\n\r");
+    log("SERIAL", INFO,"Registered /dev/sr0\n\r");
 }

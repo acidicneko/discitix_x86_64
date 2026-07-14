@@ -35,7 +35,6 @@ SOFTWARE. */
 #include <drivers/tty/tty.h>
 #include <fs/fat32.h>
 #include <fs/stripFS.h>
-#include <fs/procfs.h>
 #include <init/stivale2.h>
 #include <kernel/elf.h>
 #include <kernel/sched/scheduler.h>
@@ -136,7 +135,7 @@ void init_kernel() {
                 0xD08770, 0xEBCB8B, 0xA3BE8C, 0xB48EAD);
   }
   printf("UNIX Epoch: %ul\n\r", get_unix_epoch());
-  dbgln("Kernel initialised successfully!\n\r");
+  log("KERNEL",INFO,"Kernel initialised successfully!\n\r");
   print_font_details();
 }
 
@@ -204,9 +203,9 @@ void kmain() {
   task_t* elf_task = run_elf_from_initrd("/bin/sh", 1, argv);
   
   if (elf_task) {
-      dbgln("Created ELF task id=%d from initrd\n\r", elf_task->id);
+      log("ELF",INFO,"Created task id=%d from initrd\n\r", elf_task->id);
   } else {
-      dbgln("No ELF program in initrd (or load failed)\n\r");
+      log("ELF",ERROR,"No ELF program in initrd (or load failed)\n\r");
   }
 
   for (;;) {

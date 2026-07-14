@@ -6,7 +6,7 @@
 
 int elf_validate(const void* data, size_t size) {
     if (size < sizeof(elf64_ehdr_t)) {
-        dbgln("ELF: File too small for header\n\r");
+        log("ELF", ERROR, "File too small for header\n\r");
         return -1;
     }
     
@@ -15,44 +15,44 @@ int elf_validate(const void* data, size_t size) {
     // Check magic number
     uint32_t magic = *(uint32_t*)ehdr->e_ident;
     if (magic != ELF_MAGIC) {
-        dbgln("ELF: Invalid magic number: 0x%xl\n\r", magic);
+        log("ELF", ERROR, "Invalid magic number: 0x%xl\n\r", magic);
         return -1;
     }
     
     // Check class (64-bit)
     if (ehdr->e_ident[4] != ELFCLASS64) {
-        dbgln("ELF: Not a 64-bit ELF\n\r");
+        log("ELF", ERROR, "Not a 64-bit ELF\n\r");
         return -1;
     }
     
     // Check endianness (little endian)
     if (ehdr->e_ident[5] != ELFDATA2LSB) {
-        dbgln("ELF: Not little-endian\n\r");
+        log("ELF", ERROR, "Not little-endian\n\r");
         return -1;
     }
     
     // Check type (executable)
     if (ehdr->e_type != ET_EXEC) {
-        dbgln("ELF: Not an executable (type=%d)\n\r", ehdr->e_type);
+        log("ELF", ERROR, "Not an executable (type=%d)\n\r", ehdr->e_type);
         return -1;
     }
     
     // Check machine (x86_64)
     if (ehdr->e_machine != EM_X86_64) {
-        dbgln("ELF: Not x86_64 architecture\n\r");
+        log("ELF", ERROR, "Not x86_64 architecture\n\r");
         return -1;
     }
     
     // Check program header table
     if (ehdr->e_phoff == 0 || ehdr->e_phnum == 0) {
-        dbgln("ELF: No program headers\n\r");
+        log("ELF", ERROR, "No program headers\n\r");
         return -1;
     }
     
     // Verify program headers fit in file
     size_t ph_end = ehdr->e_phoff + (ehdr->e_phnum * ehdr->e_phentsize);
     if (ph_end > size) {
-        dbgln("ELF: Program headers extend past end of file\n\r");
+        log("ELF", ERROR, "Program headers extend past end of file\n\r");
         return -1;
     }
     
@@ -97,17 +97,17 @@ static int elf_load_impl(const void* data, size_t size, elf_info_t* info, uint64
     }
     
     if (total_pages == 0) {
-        dbgln("ELF: No loadable segments\n\r");
+        log("ELF", ERROR, "No loadable segments\n\r");
         return -1;
     }
     
-    dbgln("ELF: Loading %d pages at 0x%xl - 0x%xl (cr3=0x%xl)\n\r", 
+    log("ELF", INFO, "Loading %d pages at 0x%xl - 0x%xl (cr3=0x%xl)\n\r", 
           (int)total_pages, lowest_addr, highest_addr, cr3_phys);
     
     // Allocate page tracking array (stores both user and kernel vaddrs)
     elf_page_t* page_map = (elf_page_t*)pmalloc(1);
     if (!page_map) {
-        dbgln("ELF: Failed to allocate page tracking\n\r");
+        log("ELF", ERROR, "Failed to allocate page tracking\n\r");
         return -1;
     }
     memset(page_map, 0, 4096);
@@ -144,7 +144,7 @@ static int elf_load_impl(const void* data, size_t size, elf_info_t* info, uint64
         if (!(phdr->p_flags & 0x1)) flags |= PTE_NX;
         uint64_t seg_start = page_align_down(phdr->p_vaddr);
         uint64_t seg_end = page_align_up(phdr->p_vaddr + phdr->p_memsz);
-        dbgln("ELF: Loading segment %d: vaddr=0x%xl filesz=%d memsz=%d flags=0x%xi\n\r",
+        log("ELF", INFO, "Loading segment %d: vaddr=0x%xl filesz=%d memsz=%d flags=0x%xi\n\r",
               i, phdr->p_vaddr, (int)phdr->p_filesz, (int)phdr->p_memsz, phdr->p_flags);
 
         // Allocate and map pages for this segment
@@ -162,7 +162,7 @@ static int elf_load_impl(const void* data, size_t size, elf_info_t* info, uint64
                 // Allocate physical page (returns kernel vaddr)
                 void* page = pmalloc(1);
                 if (!page) {
-                    dbgln("ELF: Failed to allocate page\n\r");
+                    log("ELF", ERROR, "Failed to allocate page\n\r");
                     elf_free(info);
                     return -1;
                 }
@@ -183,7 +183,7 @@ static int elf_load_impl(const void* data, size_t size, elf_info_t* info, uint64
                 }
                 
                 if (map_result != 0) {
-                    dbgln("ELF: Failed to map page at 0x%xl\n\r", vaddr);
+                    log("ELF", ERROR, "Failed to map page at 0x%xl\n\r", vaddr);
                     pmm_free_pages(page, 1);
                     elf_free(info);
                     return -1;
@@ -200,7 +200,7 @@ static int elf_load_impl(const void* data, size_t size, elf_info_t* info, uint64
         if (phdr->p_filesz > 0) {
             // Validate file offset
             if (phdr->p_offset + phdr->p_filesz > size) {
-                dbgln("ELF: Segment data extends past end of file\n\r");
+                log("ELF", ERROR, "Segment data extends past end of file\n\r");
                 elf_free(info);
                 return -1;
             }
@@ -213,7 +213,7 @@ static int elf_load_impl(const void* data, size_t size, elf_info_t* info, uint64
             while (remaining > 0) {
                 void* kva = find_kernel_vaddr(dest_vaddr);
                 if (!kva) {
-                    dbgln("ELF: No kernel mapping for 0x%xl\n\r", dest_vaddr);
+                    log("ELF", ERROR, "No kernel mapping for 0x%xl\n\r", dest_vaddr);
                     elf_free(info);
                     return -1;
                 }
@@ -253,7 +253,7 @@ static int elf_load_impl(const void* data, size_t size, elf_info_t* info, uint64
     }
     
     info->num_pages = num_mapped;
-    dbgln("ELF: Loaded successfully, entry point 0x%xl\n\r", info->entry_point);
+    log("ELF", INFO, "Loaded successfully, entry point 0x%xl\n\r", info->entry_point);
     return 0;
     
     #undef find_kernel_vaddr

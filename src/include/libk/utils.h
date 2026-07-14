@@ -8,7 +8,7 @@
 #include <stdarg.h>
 
 void sysfetch();
-void log(int status, char *fmt, ...);
+void log(const char* module, int status, char *fmt, ...);
 void dbgln(char *fmt, ...);
 void init_arg_parser();
 int arg_exist(char *arg);

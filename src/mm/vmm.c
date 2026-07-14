@@ -23,7 +23,7 @@ static uint64_t kernel_cr3 = 0;
 
 int init_vmm() {
     kernel_cr3 = read_cr3();
-    dbgln("VMM: initialized, kernel CR3 = 0x%xl\n\r", kernel_cr3);
+    log("VMM",INFO, "initialized, kernel CR3 = 0x%xl\n\r", kernel_cr3);
     return 0;
 }
 
@@ -167,7 +167,7 @@ void *vmm_unmap_page_in(uint64_t cr3_phys, void *virt) {
 uint64_t vmm_create_user_page_table(void) {
     void *new_pml4_virt = pmalloc(1);
     if (!new_pml4_virt) {
-        dbgln("VMM: Failed to allocate PML4\n\r");
+        log("VMM", ERROR, "Failed to allocate PML4\n\r");
         return 0;
     }
 
@@ -183,7 +183,7 @@ uint64_t vmm_create_user_page_table(void) {
         new_pml4[i] = kernel_pml4[i];
 
     uint64_t new_cr3 = (uint64_t)phys_from_virt(new_pml4_virt);
-    dbgln("VMM: Created user page table at phys 0x%llx\n\r", new_cr3);
+    log("VMM", INFO, "Created user page table at phys 0x%xl\n\r", new_cr3);
     return new_cr3;
 }
 
@@ -224,7 +224,7 @@ void vmm_free_user_page_table(uint64_t cr3_phys) {
     }
 
     pmm_free_pages(pml4, 1);
-    dbgln("VMM: Freed user page table at phys 0x%llx\n\r", cr3_phys);
+    log("VMM", INFO, "Freed user page table at phys 0x%xl\n\r", cr3_phys);
 }
 uint64_t vmm_get_pte(uint64_t cr3_phys, uint64_t vaddr) {
     uint64_t *pml4 = virt_from_phys((void*)(cr3_phys & 0x000ffffffffff000ULL));
@@ -292,7 +292,7 @@ uint64_t vmm_clone_user_page_table(uint64_t parent_cr3_phys) {
     return child_cr3_phys;
 
 fail:
-    dbgln("VMM: clone OOM — freeing partial child\n\r");
+    log("VMM", ERROR, "clone OOM — freeing partial child\n\r");
     vmm_free_user_page_table(child_cr3_phys);
     return 0;
 }

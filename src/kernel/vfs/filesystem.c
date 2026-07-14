@@ -10,7 +10,7 @@ static superblock_t *root_superblock = NULL;
 
 int vfs_mount(superblock_t *sb, const char *mount_point) {
     if (!sb || !mount_point) return -1;
-    dbgln("VFS: mounting fs '%s' at '%s'\n\r", sb->fs_type, mount_point);
+    log("VFS", INFO, "mounting fs '%s' at '%s'\n\r", sb->fs_type, mount_point);
 
     vfs_mount_t *m = (vfs_mount_t *)pmalloc(1);
     if (!m) return -1;
@@ -128,7 +128,7 @@ int vfs_mkdir_at(inode_t *parent, const char *name) {
 	new_dentry->next = parent_d->children;
 	parent_d->children = new_dentry;
 
-	dbgln("VFS: created directory '%s'\n\r", name);
+	log("VFS",INFO,"created directory '%s'\n\r", name);
 	return 0;
 }
 int vfs_mkdir(const char *path) {
@@ -172,7 +172,7 @@ int vfs_mkdir(const char *path) {
     if (!parent_dentry || !parent_dentry->inode) {
         return -1;
     }
-    dbgln("DEBUG vfs_mkdir: Attempting to create '%s' inside folder '%s'", dir_name, parent_dentry->name);
+    log("VFS",INFO,"vfs_mkdir: Attempting to create '%s' inside folder '%s'\n\r", dir_name, parent_dentry->name);
     // --- VFS ROUTING ENGINE ---
     // If the underlying filesystem driver provides a specialized mkdir hook (like FAT32), use it!
     if (parent_dentry->inode->i_ops && parent_dentry->inode->i_ops->mkdir) {
@@ -181,73 +181,6 @@ int vfs_mkdir(const char *path) {
 
     // Fall back to virtual RAM-backed structure for stripFS, /dev, /proc, etc.
     return vfs_mkdir_at(parent_dentry->inode, dir_name);
-}
-// Register a device at a given path
-int vfs_register_device(const char *path, inode_t *device_inode) {
-	if (!path || !device_inode || path[0] != '/') return -1;
-
-	if (!root_superblock || !root_superblock->root || !root_superblock->root->inode) {
-		return -1;
-	}
-
-	char path_copy[PATH_MAX];
-	strncpy(path_copy, path, PATH_MAX - 1);
-	path_copy[PATH_MAX - 1] = '\0';
-
-	// Find parent directory and device name
-	char *last_slash = NULL;
-	for (int i = strlen(path_copy) - 1; i >= 0; i--) {
-		if (path_copy[i] == '/') {
-			last_slash = &path_copy[i];
-			break;
-		}
-	}
-
-	if (!last_slash) return -1;
-
-	char *dev_name = last_slash + 1;
-	if (*dev_name == '\0') return -1;
-
-	inode_t *parent_inode;
-	dentry_t *parent_dentry;
-
-	if (last_slash == path_copy) {
-		// Device in root directory
-		parent_inode = root_superblock->root->inode;
-		parent_dentry = root_superblock->root;
-	} else {
-		*last_slash = '\0';
-		if (vfs_lookup_path(path_copy, &parent_inode) != 0) {
-			return -1;
-		}
-		parent_dentry = (dentry_t *)parent_inode->private;
-	}
-
-	if (!parent_inode->is_directory || !parent_dentry) return -1;
-
-	// Check if device already exists
-	dentry_t *child = parent_dentry->children;
-	while (child) {
-		if (!strcmp(child->name, dev_name)) {
-			return -1; // Already exists
-		}
-		child = child->next;
-	}
-
-	// Create new dentry for the device
-	dentry_t *new_dentry = (dentry_t *)pmalloc(1);
-	if (!new_dentry) return -1;
-	memset(new_dentry, 0, 4096);
-	strncpy(new_dentry->name, dev_name, NAME_MAX - 1);
-	new_dentry->parent = parent_dentry;
-	new_dentry->inode = device_inode;
-
-	// Add to parent's children list
-	new_dentry->next = parent_dentry->children;
-	parent_dentry->children = new_dentry;
-
-	dbgln("VFS: registered device '%s' at '%s'\n\r", dev_name, path);
-	return 0;
 }
 
 // Get root dentry

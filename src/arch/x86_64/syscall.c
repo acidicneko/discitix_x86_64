@@ -69,5 +69,5 @@ void init_syscalls(void) {
     // Flags: 0xEE = Present(1) | DPL(11) | Type(01110) = interrupt gate accessible from Ring 3
     idt_set_gate(0x80, (uint64_t)syscall_stub, GDT_KERNEL_CODE, 0xEE);
     
-    dbgln("Syscalls initialized (int 0x80)\n\r");
+    log("SYSCALL", INFO, "syscalls initialized (int 0x80)\n\r");
 }

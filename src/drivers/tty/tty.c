@@ -49,7 +49,7 @@ void init_tty() {
     char id_str[8];
     itoa(i, id_str, 10);
     strcat(name, id_str);
-    dbgln("Registering /dev/%s\n\r", name);
+    log("TTY", INFO, "Registering /dev/%s\n\r", name);
     devfs_register_device(name, &tty_file_ops, FT_CHR);  
     ttys[i] = (tty_t) {
       .x_cursor = 0,
@@ -72,7 +72,6 @@ void init_tty() {
     memset(ttys[i].buffer, 0, sizeof(terminal_cell_t)*ttys[i].height*ttys[i].width);
   }
   current_tty = &ttys[0]; 
-  dbgln("TTYs registered at /dev/tty0-3\n\r");
   tty_initialized = true;
   // tty_paint_cursor(x_cursor, y_cursor);
 }
@@ -134,14 +133,14 @@ void tty_paint_cell(terminal_cell_t cell) {
 
 void tty_paint_cell_psf(terminal_cell_t cell, tty_t* tty) {
   if (g_font.header == 0) {
-    dbgln("[TTY] Invalid psf font detected! Falling back to bitmap font!\n\r");
+    log("TTY", ERROR,"Invalid psf font detected! Falling back to bitmap font!\n\r");
     tty_paint_cell(cell);
     return;
   }
 
   if (g_font.glyphBuffer == 0) {
-    dbgln(
-        "[TTY] Invalid font memory detected! Falling back to bitmap font!\n\r");
+    log("TTY", ERROR,
+        "Invalid font memory detected! Falling back to bitmap font!\n\r");
     tty_paint_cell(cell);
     return;
   }
@@ -150,7 +149,7 @@ void tty_paint_cell_psf(terminal_cell_t cell, tty_t* tty) {
       g_font.glyphBuffer + (cell.printable_char * g_font.header->bytesperglyph);
 
   if (glyph == 0) {
-    dbgln("[TTY] Invalid symbol Falling back to bitmap font!\n\r");
+    dbgln("TTY",ERROR,"Invalid symbol Falling back to bitmap font!\n\r");
     tty_paint_cell(cell);
     return;
   }

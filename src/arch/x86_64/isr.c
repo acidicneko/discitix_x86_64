@@ -116,7 +116,7 @@ void init_isr(){
     idt_set_gate(29, (uint64_t)isr29, 0x08, 0x8E);
     idt_set_gate(30, (uint64_t)isr30, 0x08, 0x8E);
     idt_set_gate(31, (uint64_t)isr31, 0x08, 0x8E);
-    dbgln("ISRs initialised\n\r");
+    log("ISR", INFO,"ISRs initialised\n\r");
 }
 
 void isr_install_handler(int isr, void (*handler)(register_t* regs)){

@@ -79,7 +79,7 @@ int64_t sys_read(uint64_t fd, uint64_t buf, uint64_t count,
 int64_t sys_open(uint64_t path_ptr, uint64_t flags, uint64_t mode,
                  uint64_t arg4, uint64_t arg5, uint64_t arg6) {
     (void)mode; (void)arg4; (void)arg5; (void)arg6;
-    dbgln("DEBUG sys_open: path='%s', flags=0x%xl (decimal %d)\n\r", (const char*)path_ptr, flags, flags);
+    log("SYS_OPEN",INFO,"path='%s', flags=0x%xl (decimal %d)\n\r", (const char*)path_ptr, flags, flags);
     const char *path = (const char*)path_ptr;
     task_t *current = get_current_task();
     
@@ -93,9 +93,8 @@ int64_t sys_open(uint64_t path_ptr, uint64_t flags, uint64_t mode,
             break;
         }
     }
-    dbgln("sys_open: found free fd %d\n\r", fd); 
     if (fd < 0) {
-        dbgln("sys_open: no free fd\n\r");
+        log("SYS_OPEN",ERROR,"no free fd\n\r");
         return -1;  // No free file descriptors
     }
     
@@ -103,27 +102,26 @@ int64_t sys_open(uint64_t path_ptr, uint64_t flags, uint64_t mode,
     if (vfs_lookup_path(path, &inode) != 0 || !inode) {
       if (flags & O_CREAT) {
             if (vfs_create(path, mode) != 0) {
-                dbgln("sys_open: vfs_create failed for %s\n\r", path);
+                log("SYS_OPEN",ERROR, "vfs_create failed for %s\n\r", path);
                 return -1;
             }
             if (vfs_lookup_path(path, &inode) != 0 || !inode) {
                 return -1;
             }
         } else {
-            dbgln("sys_open: file not found: %s\n\r", path);
+            log("SYS_OPEN", ERROR,"file not found: %s\n\r", path);
             return -ENOENT; 
         }
     } 
-    dbgln("sys_open: found the inode!\n\r"); 
     file_t *f = NULL;
     if (vfs_open(&f, inode, (uint32_t)flags) != 0 || !f) {
-        dbgln("sys_open: vfs_open failed\n\r");
+        log("SYS_OPEN",ERROR, "vfs_open failed\n\r");
         return -1;
     }
     
     current->fd_table[fd] = f;
     
-    dbgln("sys_open: opened '%s' as fd %d\n\r", path, fd);
+    log("SYS_OPEN",INFO, "opened '%s' as fd %d\n\r", path, fd);
     return fd;
 }
 
@@ -158,7 +156,7 @@ int64_t sys_mkdir(uint64_t path_ptr, uint64_t mode, uint64_t arg3,
     
     if (!current || !path) return -1;
     
-    dbgln("DEBUG sys_mkdir: path='%s'", path);
+    log("SYS_MKDIR", INFO, "path='%s'", path);
     
     if (vfs_mkdir(path) != 0) {
         return -1;     
@@ -255,12 +253,11 @@ int64_t sys_getdents64(uint64_t fd, uint64_t buf_ptr, uint64_t count,
     inode_t *inode = f->inode;
     
     if (!inode || !inode->is_directory) {
-        dbgln("sys_getdents64: fd %d is not a directory\n\r", (int)fd);
+        log("SYS_GETDETNS64", ERROR, "fd %d is not a directory\n\r", (int)fd);
         return -1;
     }
-    dbgln("DEBUG getdents: Inode number = %ul\n\r", inode->ino);
     if (!inode->i_ops || !inode->i_ops->getdents) {
-        dbgln("sys_getdents64: filesystem does not support getdents\n\r");
+        log("SYS_GETDENTS64",ERROR ,"filesystem does not support getdents\n\r");
         return -1;
     }
 

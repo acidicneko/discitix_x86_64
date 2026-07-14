@@ -78,5 +78,5 @@ void init_gdt(){
     load_gdt(&gdt);
     load_tss(GDT_TSS);
     
-    dbgln("GDT Loaded with user-mode segments and TSS\\n\\r");
+    log("GDT", INFO,"Loaded with user-mode segments and TSS\\n\\r");
 }

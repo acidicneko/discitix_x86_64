@@ -21,7 +21,7 @@ int64_t sys_exit(uint64_t status, uint64_t arg2, uint64_t arg3,
     task_t *current = get_current_task();
     if (!current) return -1;
 
-    dbgln("Process (task %d) called exit(%d)\n\r", current->id, (int)status);
+    log("SYS_EXIT",INFO,"Process (task %d) called exit(%d)\n\r", current->id, (int)status);
     current->exit_status = (int)status;
     
     if (current->parent_id > 0) {
@@ -99,7 +99,7 @@ int64_t sys_waitpid(uint64_t pid, uint64_t status_ptr, uint64_t options,
         pmm_free_pages(child->stack_base, child->stack_pages);
         pmm_free_pages(child, 1);
         
-        dbgln("waitpid: collected and destroyed child %d\n\r", child_id);
+        log("SYSWAITPID", INFO, "collected and destroyed child %d\n\r", child_id);
         return child_id;
     }
     
@@ -144,7 +144,7 @@ int64_t sys_exec(uint64_t path_ptr, uint64_t argv_ptr, uint64_t envp_ptr,
   task_t *current_task = get_current_task();
   
   if (!current_task || !path) return -1;
-  dbgln("sys_exec: loading '%s' into task %d\n\r", path, current_task->id);
+  log("SYS_EXEC",INFO,"loading '%s' into task %d\n\r", path, current_task->id);
 
   // 1. VFS LOOKUP & FILE LOADING
   inode_t *inode = NULL;

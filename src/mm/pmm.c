@@ -77,7 +77,7 @@ void *pmalloc(size_t pages) {
     }
   }
 
-  dbgln("PMM: Ran out of memory! Halting!\n\r");
+  log("PMM",INFO, "Ran out of memory! Halting!\n\r");
   while (1)
     ;
   return NULL;
@@ -134,7 +134,7 @@ int init_pmm() {
       break;
     }
   }
-  dbgln("Allocated bitmap at: 0x%xh\n\r", pmm_bitmap);
+  log("PMM",INFO,"Allocated bitmap at: 0x%xh\n\r", pmm_bitmap);
   memset(pmm_bitmap, 0xff, bitmap_size);
 
   for (uint64_t i = 0; i < memory_info->entry_count; i++) {

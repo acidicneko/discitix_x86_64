@@ -21,14 +21,12 @@ void sysfetch() {
          "\033[21;45m  \033[21;46m  \033[21;47m  \033[0m\n");
 }
 
-void log(int status, char *fmt, ...) {
-  if (status == 1)
-    printf("\033[32m[INFO] \033[0m");
-  else
-    printf("\033[31m[ERROR] \033[0m");
+void log(const char* module, int status, char *fmt, ...) {
+  dbgln("\033[1;34m[%s] %s: \033[0m", module, status ? "\033[32m" : "\033[31mERROR");
+  
   va_list args;
   va_start(args, fmt);
-  __vsprintf__(fmt, args, putchar, puts);
+  __vsprintf__(fmt, args, serial_putchar, serial_puts);
   va_end(args);
 }
 

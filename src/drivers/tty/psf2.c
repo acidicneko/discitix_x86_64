@@ -20,22 +20,22 @@ void load_embedded_psf2() {
   file_t* font = NULL;
   inode_t *font_inode = NULL;
   if(vfs_lookup_path("/font.psf", &font_inode) != 0) {
-    dbgln("Font file not found in /font.psf\n\r");
+    log("PSF2", ERROR, "Font file not found in /font.psf\n\r");
     return;
   }
   if (vfs_open(&font, font_inode, 0) != 0) {
-    dbgln("Failed to open font file!\n\r");
+    log("PSF2", ERROR, "Failed to open font file!\n\r");
     return;
   }
   uint8_t *font_buffer = pmalloc((font->inode->size + PAGE_SIZE - 1) / PAGE_SIZE);
   long read_bytes = vfs_read(font, font_buffer, font->inode->size);
   if (read_bytes != (long)font->inode->size) {
-    dbgln("Failed to read entire font file!\n\r");
+    log("PSF2", ERROR, "Failed to read entire font file!\n\r");
     pmm_free_pages(font_buffer, (font->inode->size + PAGE_SIZE - 1) / PAGE_SIZE);
     return;
   }
   vfs_close(font);
-  dbgln("Font file size: %ul bytes\n\r",font->inode->size);
+  log("PSF2", INFO,"Font file size: %ul bytes\n\r",font->inode->size);
   psf2_header_t *font_header = (psf2_header_t *)(void *)font_buffer;
 
   // Validate magic number
@@ -43,13 +43,13 @@ void load_embedded_psf2() {
       font_header->magic[1] == PSF2_MAGIC1 &&
       font_header->magic[2] == PSF2_MAGIC2 &&
       font_header->magic[3] == PSF2_MAGIC3) {
-    dbgln("Provided font is PSF2!\n\r");
+    log("PSF2",INFO,"Provided font is PSF2!\n\r");
   } else if (font_header->magic[0] == PSF1_MAGIC0 &&
              font_header->magic[1] == PSF1_MAGIC1) {
-    dbgln("Provided font is PSF1!\n\r");
+    log("PSF2", INFO,"Provided font is PSF1!\n\r");
     return;
   } else {
-    dbgln(
+    log("PSF2", ERROR,
         "Invalid font type provided!\n\rKernel wouldn't be able to boot!\n\r");
     return;
   }

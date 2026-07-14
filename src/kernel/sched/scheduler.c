@@ -54,7 +54,7 @@ void task_enqueue(task_t *t) {
 
 void task_exit() {
     current->state = TASK_ZOMBIE;
-    dbgln("SCHED: task id=%d exited\n\r", current->id);
+    log("SCHED",INFO,"task id=%d exited\n\r", current->id);
     
     if (current->is_usermode) {
         if (current->user_code) pmm_free_pages(current->user_code, current->user_code_pages);
@@ -72,7 +72,7 @@ static void sweep_wakeup(void) {
     do {
         if (t->state == TASK_BLOCKED && t->wake_tick <= ticks) {
             t->state = TASK_RUNNABLE;
-            dbgln("SCHED: wake task id=%d\n\r", t->id);
+            log("SCHED",INFO,"wake task id=%d\n\r", t->id);
         }
         t = t->next;
     } while (t != task_list);
@@ -147,7 +147,7 @@ static void setup_task_stdio(task_t *t) {
     
     inode_t *tty_inode = NULL;
     if (vfs_lookup_path(tty_path, &tty_inode) != 0 || !tty_inode) {
-        dbgln("setup_task_stdio: Could not find %s", tty_path);
+        log("SCHED",ERROR,"setup_task_stdio: Could not find %s", tty_path);
         return;
     }
     
@@ -365,7 +365,7 @@ task_t *fork_current_task(register_t *parent_regs) {
         child->fd_table[i] = parent->fd_table[i];
     }
     
-    dbgln("SCHED: forked task %d -> child %d with distinct CR3\n\r", parent->id, child->id);
+    log("SCHED",INFO, "forked task %d -> child %d with distinct CR3\n\r", parent->id, child->id);
     task_enqueue(child);
     
     return child;

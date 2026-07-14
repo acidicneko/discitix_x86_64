@@ -13,7 +13,7 @@ void init_framebuffer() {
   struct limine_framebuffer_response *fb_response =
       framebuffer_request.response;
   if (!fb_response || fb_response->framebuffer_count == 0) {
-    dbgln("No framebuffer found!\n\r");
+    log("FB",ERROR,"No framebuffer found!\n\r");
     return;
   }
   fb_info.address = (uint32_t *)(uint64_t)fb_response->framebuffers[0]->address;
