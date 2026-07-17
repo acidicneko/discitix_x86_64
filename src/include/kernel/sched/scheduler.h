@@ -45,12 +45,12 @@ typedef struct task {
     void *cwd;  
 } task_t;
 
+#define USER_STACK_TOP_VADDR 0x7FFFF0000000ULL
+#define USER_STACK_VADDR     (USER_STACK_TOP_VADDR - 8192)
+
 void init_scheduler();
-task_t *create_task(void (*entry)(void *), void *arg, size_t stack_pages);
-task_t *create_user_task(void *user_code, size_t code_size, size_t stack_pages);
-task_t *create_elf_task(const void *elf_data, size_t elf_size, size_t stack_pages);
 task_t *create_elf_task_args(const void *elf_data, size_t elf_size, size_t stack_pages,
-                              int argc, char *argv[]);
+                              int argc, char *argv[], int envc, char *envp[]);
 task_t *fork_current_task(register_t *parent_regs);
 task_t *find_task_by_id(int id);
 void schedule_tick(register_t *regs);

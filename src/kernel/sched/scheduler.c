@@ -1,4 +1,5 @@
 #include <kernel/sched/scheduler.h>
+#include <kernel/sched/build_stack.h>
 #include <kernel/elf.h>
 #include <kernel/vfs/vfs.h>
 #include <mm/pmm.h>
@@ -15,7 +16,6 @@ task_t *task_list = NULL;
 static task_t *current = NULL;
 static int next_task_id = 1;
 
-#define USER_STACK_VADDR 0x7FFFFF000000ULL
 #define USER_CODE_VADDR  0x400000ULL
 
 void init_scheduler() {
@@ -158,8 +158,8 @@ static void setup_task_stdio(task_t *t) {
         }
     }
 }
-
-task_t *create_elf_task_args(const void *elf_data, size_t elf_size, size_t stack_pages, int argc, char *argv[]) {
+task_t *create_elf_task_args(const void *elf_data, size_t elf_size, size_t stack_pages,
+                              int argc, char *argv[], int envc, char *envp[]) {
     uint64_t task_cr3 = vmm_create_user_page_table();
     if (task_cr3 == 0) return NULL;
     
@@ -188,60 +188,26 @@ task_t *create_elf_task_args(const void *elf_data, size_t elf_size, size_t stack
     void *ustack_phys1 = phys_from_virt(ustack);
     void *ustack_phys2 = phys_from_virt((void*)((uint64_t)ustack + 4096));
     
-    if (vmm_map_page_in(task_cr3, (void*)USER_STACK_VADDR, ustack_phys1, user_flags) != 0 ||
-        vmm_map_page_in(task_cr3, (void*)(USER_STACK_VADDR + 4096), ustack_phys2, user_flags) != 0) {
-        if (t) pmm_free_pages(t, 1);
-        if (kernel_stack) pmm_free_pages(kernel_stack, stack_pages);
-        if (ustack) pmm_free_pages(ustack, 2);
+    if (vmm_map_page_in(task_cr3, (void*)USER_STACK_TOP_VADDR, ustack_phys1, user_flags) != 0 ||
+        vmm_map_page_in(task_cr3, (void*)(USER_STACK_TOP_VADDR + 4096), ustack_phys2, user_flags) != 0) {
+        pmm_free_pages(t, 1);
+        pmm_free_pages(kernel_stack, stack_pages);
+        pmm_free_pages(ustack, 2);
         elf_free(&elf_info);
         vmm_free_user_page_table(task_cr3);
         return NULL;
     }
     
-    uint64_t offset = 8192; // Start exactly at the top of the 2-page stack block
-    uint8_t *kstack_base = (uint8_t*)ustack;
-    uint64_t arg_user_ptrs[64];
-    
-    // 1. Push Strings
-    for (int i = 0; i < argc && i < 64; i++) {
-        size_t len = strlen(argv[i]) + 1;
-        offset -= len;
-        memcpy(kstack_base + offset, (uint8_t*)argv[i], len);
-        arg_user_ptrs[i] = USER_STACK_VADDR + offset;
+    user_stack_result_t stack_res;
+    if (build_user_stack((uint8_t*)ustack, 8192, USER_STACK_TOP_VADDR,
+                          argc, argv, envc, envp, &stack_res) != 0) {
+        pmm_free_pages(t, 1);
+        pmm_free_pages(kernel_stack, stack_pages);
+        pmm_free_pages(ustack, 2);
+        elf_free(&elf_info);
+        vmm_free_user_page_table(task_cr3);
+        return NULL;
     }
-    
-    // 2. The Bulletproof ABI Alignment
-    // Space needed: envp NULL (8) + argv NULL (8) + argv ptrs (8 * argc) + argc (8)
-    uint64_t array_size = 24 + (8 * argc);
-    
-    // Calculate a perfectly 16-byte aligned RSP
-    uint64_t target_rsp = (USER_STACK_VADDR + offset - array_size) & ~0xFULL;
-    
-    // Shift our offset down so the arrays perfectly hit the target_rsp
-    offset = target_rsp - USER_STACK_VADDR + array_size;
-    
-    // 3. Push Arrays (From top to bottom)
-    
-    // Push envp NULL
-    offset -= 8;
-    *(uint64_t*)(kstack_base + offset) = 0;
-    
-    // Push argv NULL
-    offset -= 8;
-    *(uint64_t*)(kstack_base + offset) = 0;
-    
-    // Push argv pointers
-    for (int i = argc - 1; i >= 0; i--) {
-        offset -= 8;
-        *(uint64_t*)(kstack_base + offset) = arg_user_ptrs[i];
-    }
-    
-    // Push argc
-    offset -= 8;
-    *(uint64_t*)(kstack_base + offset) = (uint64_t)argc;
-    
-    uint64_t final_rsp = USER_STACK_VADDR + offset; 
-    uint64_t argv_user_vaddr = final_rsp + 8; // Pointer to argv array (right after argc)
 
     t->stack_base = kernel_stack;
     t->stack_pages = stack_pages;
@@ -257,15 +223,13 @@ task_t *create_elf_task_args(const void *elf_data, size_t elf_size, size_t stack
     t->regs.rip = elf_info.entry_point;
     t->regs.cs = 0x20 | 3;   
     t->regs.rflags = 0x202;
-    t->regs.rsp = final_rsp;        // SAFE, PROTECTED STACK POINTER
+    t->regs.rsp = stack_res.rsp;
     t->regs.ss = 0x18 | 3;   
      
-    // System V ABI technically expects _start to read from RSP, 
-    // but some early crt0 implementations use rdi/rsi. Providing both is safe.
     t->regs.rdi = argc;         
-    t->regs.rsi = argv_user_vaddr;  
+    t->regs.rsi = stack_res.argv_uvaddr;
+    t->regs.rdx = stack_res.envp_uvaddr;
     
-    // Inherit the Working Directory safely
     task_t *current_task = get_current_task();
     if (current_task && current_task->cwd) {
         t->cwd = current_task->cwd; 
@@ -280,68 +244,44 @@ task_t *create_elf_task_args(const void *elf_data, size_t elf_size, size_t stack
 task_t *fork_current_task(register_t *parent_regs) {
     task_t *parent = current;
     if (!parent || !parent->is_usermode) return NULL;
-    
-    uint64_t child_cr3 = vmm_create_user_page_table();
+
+    uint64_t child_cr3 = vmm_clone_user_page_table(parent->cr3);
     if (child_cr3 == 0) return NULL;
-    
+
     task_t *child = (task_t *)pmalloc(1);
     void *kernel_stack = pmalloc(parent->stack_pages);
-    void *child_user_stack = pmalloc(2); 
-
-    if (!child || !kernel_stack || !child_user_stack) {
+    if (!child || !kernel_stack) {
         if (child) pmm_free_pages(child, 1);
         if (kernel_stack) pmm_free_pages(kernel_stack, parent->stack_pages);
-        if (child_user_stack) pmm_free_pages(child_user_stack, 2);
         vmm_free_user_page_table(child_cr3);
         return NULL;
     }
     memset(child, 0, 4096);
-    
-    memcpy(child_user_stack, parent->user_stack, 8192);
-    
-    uint64_t user_flags = PTE_PRESENT | PTE_RW | PTE_USER;
-    void *ustack_phys1 = phys_from_virt(child_user_stack);
-    void *ustack_phys2 = phys_from_virt((void*)((uint64_t)child_user_stack + 4096));
-    
-    if (vmm_map_page_in(child_cr3, (void*)USER_STACK_VADDR, ustack_phys1, user_flags) != 0 ||
-        vmm_map_page_in(child_cr3, (void*)(USER_STACK_VADDR + 4096), ustack_phys2, user_flags) != 0) {
-        pmm_free_pages(child_user_stack, 2);
+
+    elf_page_t *parent_pages = (elf_page_t *)parent->user_code;
+    size_t meta_pages = (parent->user_code_pages * sizeof(elf_page_t) + 4095) / 4096;
+    if (meta_pages == 0) meta_pages = 1;
+    elf_page_t *child_pages = (elf_page_t *)pmalloc(meta_pages);
+    if (!child_pages) {
         pmm_free_pages(kernel_stack, parent->stack_pages);
         pmm_free_pages(child, 1);
         vmm_free_user_page_table(child_cr3);
         return NULL;
     }
-    
-    elf_page_t *parent_pages = (elf_page_t *)parent->user_code;
-    
-    elf_page_t *child_pages = (elf_page_t *)pmalloc(1);
-    if (!child_pages) {
-        // TODO: Handle severe out-of-memory error
-        return NULL;
-    }
-    memset(child_pages, 0, 4096);
-    
-    // Iterate through every single ELF page the parent owns
+    memset(child_pages, 0, meta_pages * 4096);
+
     for (size_t i = 0; i < parent->user_code_pages; i++) {
         uint64_t u_vaddr = parent_pages[i].user_vaddr;
-        void *p_kaddr = parent_pages[i].kernel_vaddr;
-        
-        // Allocate a completely new, unique physical page for the child
-        void *c_kaddr = pmalloc(1);
-        if (!c_kaddr) continue; 
-        
-        // Deep copy the actual executable machine code / data into the child's page
-        memcpy(c_kaddr, p_kaddr, 4096);
-        
-        // Save the metadata so the kernel can free it later when the child dies
-        child_pages[i].user_vaddr = u_vaddr;
-        child_pages[i].kernel_vaddr = c_kaddr;
-        
-        // Map the executable page into the child's CR3
-        void *c_phys = phys_from_virt(c_kaddr);
-        vmm_map_page_in(child_cr3, (void*)u_vaddr, c_phys, PTE_PRESENT | PTE_RW | PTE_USER); 
+        uint64_t pte = vmm_get_pte(child_cr3, u_vaddr);
+        void *c_phys = (void*)(pte & 0x000ffffffffff000ULL);
+        child_pages[i].user_vaddr   = u_vaddr;
+        child_pages[i].kernel_vaddr = virt_from_phys(c_phys);
     }
-    
+
+    uint64_t stack_pte = vmm_get_pte(child_cr3, USER_STACK_TOP_VADDR);
+    void *stack_phys = (void*)(stack_pte & 0x000ffffffffff000ULL);
+    void *child_user_stack = virt_from_phys(stack_phys);
+
     child->stack_base = kernel_stack;
     child->brk_start   = parent->brk_start;
     child->brk_current = parent->brk_current;
@@ -352,22 +292,21 @@ task_t *fork_current_task(register_t *parent_regs) {
     child->parent_id = parent->id;
     child->cr3 = child_cr3;
     child->is_usermode = 1;
-    child->user_code = child_pages;       
-    child->user_stack = child_user_stack; 
+    child->user_code = child_pages;
+    child->user_stack = child_user_stack;
     child->user_code_pages = parent->user_code_pages;
     child->cwd = parent->cwd;
-
     memcpy((uint8_t*)&child->regs, (const uint8_t*)parent_regs, sizeof(register_t));
-    
-    child->regs.rax = 0; 
-    
+
+    child->regs.rax = 0;
+
     for (int i = 0; i < MAX_FDS; i++) {
         child->fd_table[i] = parent->fd_table[i];
     }
-    
+
     log("SCHED",INFO, "forked task %d -> child %d with distinct CR3\n\r", parent->id, child->id);
     task_enqueue(child);
-    
+
     return child;
 }
 

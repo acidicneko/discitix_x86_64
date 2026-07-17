@@ -124,18 +124,22 @@ static void lfn_accum_reset(lfn_accum_t *acc) {
 
 /* ASCII-subset extraction of the 13 UCS-2 chars in one LFN entry. */
 static void lfn_extract_chars(fat32_lfn_t *lfn, char *out13) {
-    uint16_t *parts[3]  = { lfn->name1, lfn->name2, lfn->name3 };
-    int       counts[3] = { 5, 6, 2 };
-    int idx = 0;
-    for (int p = 0; p < 3; p++) {
-        for (int c = 0; c < counts[p]; c++) {
-            uint16_t ch = parts[p][c];
-            if (ch == 0x0000 || ch == 0xFFFF) { out13[idx] = '\0'; return; }
-            out13[idx++] = (ch < 0x80) ? (char)ch : '_';
+    uint16_t buf[13];
+    memcpy(&buf[0],  lfn->name1, sizeof(lfn->name1));   /* 5 chars */
+    memcpy(&buf[5],  lfn->name2, sizeof(lfn->name2));   /* 6 chars */
+    memcpy(&buf[11], lfn->name3, sizeof(lfn->name3));   /* 2 chars */
+
+    for (int idx = 0; idx < 13; idx++) {
+        uint16_t ch = buf[idx];
+        if (ch == 0x0000 || ch == 0xFFFF) {
+            out13[idx] = '\0';
+            return;
         }
+        out13[idx] = (ch < 0x80) ? (char)ch : '_';
     }
-    out13[idx] = '\0';
+    out13[13] = '\0';
 }
+
 
 /* Feed one raw 32-byte directory slot into the accumulator.
  * If this slot is a short entry preceded by a complete, checksum-valid
@@ -885,7 +889,14 @@ static bool fat32_add_entry_named(uint32_t dir_cluster, const char *long_name,
         lfn->checksum = checksum;
         lfn->first_cluster = 0;
 
-        uint16_t *parts[3]  = { lfn->name1, lfn->name2, lfn->name3 };
+        /* Build the three UCS-2 sub-arrays in ordinary (aligned) local
+         * storage first — taking &lfn->name1/2/3 directly would be
+         * taking the address of a packed-struct member, which risks an
+         * unaligned pointer. Assemble here, then memcpy into the packed
+         * struct in one shot per sub-array (memcpy is safe regardless of
+         * destination alignment). */
+        uint16_t name1[5], name2[6], name3[2];
+        uint16_t *parts[3]  = { name1, name2, name3 };
         int       counts[3] = { 5, 6, 2 };
         bool ended = false;
         int idx = 0;
@@ -902,6 +913,9 @@ static bool fat32_add_entry_named(uint32_t dir_cluster, const char *long_name,
                 idx++;
             }
         }
+        memcpy(lfn->name1, name1, sizeof(name1));
+        memcpy(lfn->name2, name2, sizeof(name2));
+        memcpy(lfn->name3, name3, sizeof(name3));
 
         ata_write_sector(slot_lba[c], sector_buf);
     }

@@ -9,7 +9,7 @@ char *itoa(int value, char *str, int base);
 
 void *memset(void *bufptr, int value, size_t size);
 uint16_t *memsetw(uint16_t *dest, uint16_t val, size_t count);
-uint8_t *memcpy(uint8_t *dest, const uint8_t *src, size_t n);
+void *memcpy(void *dest, const void *src, size_t n);
 void *memmove(void *dest, const void *src, size_t n);
 
 int strlen(const char *str);

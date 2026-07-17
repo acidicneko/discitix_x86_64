@@ -209,7 +209,6 @@ int spawn(const char *path, char *const argv[]) {
 // 5. MEMORY ALLOCATION CONTROL LAYER (sbrk/mmap)
 // ============================================================================
 extern char _end; // Bound by binary target linker scripts at end of BSS
-static char *current_heap_break = &_end;
 
 void *brk(void *addr) {
     long ret = _syscall1(SYS_BRK, (long)addr);
@@ -217,13 +216,26 @@ void *brk(void *addr) {
     return (void *)ret;
 }
 
-caddr_t sbrk(int incr) {
-    char *prev_break = current_heap_break;
-    if (incr == 0) return (caddr_t)prev_break;
+static char *current_heap_break = NULL;
 
-    char *next_break = (char *)((long)current_heap_break + incr);
+caddr_t sbrk(int incr) {
+    if (current_heap_break == NULL) {
+        // First call: ask kernel for the real current break (addr=0 case in sys_brk)
+        void *real_brk = brk(0);
+        if (real_brk == (void *)-1) {
+            errno = ENOMEM;
+            return (caddr_t)-1;
+        }
+        current_heap_break = (char*)real_brk;
+    }
+
+    if (incr == 0) return (caddr_t)current_heap_break;
+
+    char *prev_break = current_heap_break;
+    char *next_break = prev_break + incr;
     void *result = brk(next_break);
-    if (result == (void *)-1) {
+
+    if (result == (void *)-1 || result != (void*)next_break) {
         errno = ENOMEM;
         return (caddr_t)-1;
     }

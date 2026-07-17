@@ -66,14 +66,13 @@ uint16_t *memsetw(uint16_t *dest, uint16_t val, size_t count) {
   return dest;
 }
 
-uint8_t *memcpy(uint8_t *dest, const uint8_t *src, size_t n) {
-  uint8_t *d = dest;
-  const uint8_t *s = src;
-  while (n--) {
-    *d++ = *s++;
-  }
-  return dest;
+void *memcpy(void *dest, const void *src, size_t n) {
+    uint8_t *d = (uint8_t*)dest;
+    const uint8_t *s = (const uint8_t*)src;
+    for (size_t i = 0; i < n; i++) d[i] = s[i];
+    return dest;
 }
+
 
 void *memmove(void *dest, const void *src, size_t n) {
   unsigned char *d = (unsigned char *)dest;

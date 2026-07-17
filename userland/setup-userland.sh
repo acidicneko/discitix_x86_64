@@ -44,8 +44,8 @@ cp -r newlib_discitix/x86_64-elf/lib source/usr/
 cd source
 echo "Compiling Discitix runtime..."
 
-x86_64-linux-gnu-gcc -Idlibc -nostdlib -ffreestanding -mno-red-zone -fno-pic -no-pie -c crt.c -o usr/lib/crt0.o
-x86_64-linux-gnu-gcc -Idlibc -nostdlib -ffreestanding -mno-red-zone -fno-pic -no-pie -c stubs.c -o usr/lib/stubs.o
+x86_64-linux-gnu-gcc -Iusr/include -nostdlib -ffreestanding -mno-red-zone -fno-pic -no-pie -c crt.c -o usr/lib/crt0.o
+x86_64-linux-gnu-gcc -Iusr/include -nostdlib -ffreestanding -mno-red-zone -fno-pic -no-pie -c stubs.c -o usr/lib/stubs.o
 x86_64-linux-gnu-ar rcs usr/lib/libc.a usr/lib/stubs.o
 
 echo "Done!"

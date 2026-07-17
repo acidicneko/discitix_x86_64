@@ -62,9 +62,19 @@ void pmm_alloc_pages(void *adr, size_t page_count) {
   free_mem -= page_count * PAGE_SIZE;
 }
 
-void *pmalloc(size_t pages) {
-  size_t max_pages = highest_page / PAGE_SIZE;
+static inline uint64_t irq_save_disable(void) {
+    uint64_t flags;
+    asm volatile("pushfq; pop %0; cli" : "=r"(flags) :: "memory");
+    return flags;
+}
+static inline void irq_restore(uint64_t flags) {
+    asm volatile("push %0; popfq" :: "r"(flags) : "memory", "cc");
+}
 
+void *pmalloc(size_t pages) {
+  uint64_t flags = irq_save_disable();
+
+  size_t max_pages = highest_page / PAGE_SIZE;
   for (size_t i = 0; i < max_pages; i++) {
     for (size_t j = 0; j < pages; j++) {
       if (BIT_TEST(i + j))
@@ -72,14 +82,15 @@ void *pmalloc(size_t pages) {
       else if (j == pages - 1) {
         uintptr_t phys_addr = (uintptr_t)(i * PAGE_SIZE);
         pmm_alloc_pages((void *)phys_addr, pages);
+        irq_restore(flags);
         return get_virtual_address((void *)phys_addr);
       }
     }
   }
 
   log("PMM",INFO, "Ran out of memory! Halting!\n\r");
-  while (1)
-    ;
+  irq_restore(flags);
+  while (1) ;
   return NULL;
 }
 

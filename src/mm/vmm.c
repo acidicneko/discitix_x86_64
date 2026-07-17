@@ -186,7 +186,6 @@ uint64_t vmm_create_user_page_table(void) {
     log("VMM", INFO, "Created user page table at phys 0x%xl\n\r", new_cr3);
     return new_cr3;
 }
-
 void vmm_free_user_page_table(uint64_t cr3_phys) {
     if (cr3_phys == 0 || cr3_phys == kernel_cr3) return;
 
@@ -202,7 +201,6 @@ void vmm_free_user_page_table(uint64_t cr3_phys) {
         for (size_t i3 = 0; i3 < 512; i3++) {
             if (!(pdpt[i3] & PTE_PRESENT)) continue;
 
-            /* Bug fixed: was 0x000fffffffff000 — missing one 'f' */
             uint64_t *pd = (uint64_t *)virt_from_phys(
                 (void *)(pdpt[i3] & 0x000ffffffffff000ULL));
 
@@ -211,7 +209,17 @@ void vmm_free_user_page_table(uint64_t cr3_phys) {
 
                 uint64_t *pt = (uint64_t *)virt_from_phys(
                     (void *)(pd[i2] & 0x000ffffffffff000ULL));
-                pmm_free_pages(pt, 1);
+
+                // NEW: free the actual LEAF DATA FRAMES this PT maps,
+                // before freeing the PT structure page itself.
+                for (size_t i1 = 0; i1 < 512; i1++) {
+                    if (!(pt[i1] & PTE_PRESENT)) continue;
+                    void *leaf_phys = (void *)(pt[i1] & 0x000ffffffffff000ULL);
+                    pmm_free_pages(virt_from_phys(leaf_phys), 1);
+                    pt[i1] = 0;
+                }
+
+                pmm_free_pages(pt, 1);   // now free the PT page itself
                 pd[i2] = 0;
             }
 

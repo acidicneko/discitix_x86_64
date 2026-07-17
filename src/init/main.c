@@ -182,7 +182,7 @@ task_t* run_elf_from_initrd(const char* filename, int argc, char *argv[]) {
     
     // Call our newly revamped task builder with full ABI compatibility!
     // We pass 4 pages for the kernel execution stack to avoid overflow during nested interrupts.
-    task_t* task = create_elf_task_args(buffer, file_size, 4, argc, argv);
+    task_t* task = create_elf_task_args(buffer, file_size, 4, argc, argv, 0, NULL);
     
     // Clean up temporary copy buffer now that the loader has mapped the binary into child CR3 space
     pmm_free_pages(buffer, pages_needed);
@@ -201,7 +201,6 @@ void kmain() {
 
   char* argv[] = {"sh", NULL};
   task_t* elf_task = run_elf_from_initrd("/bin/sh", 1, argv);
-  
   if (elf_task) {
       log("ELF",INFO,"Created task id=%d from initrd\n\r", elf_task->id);
   } else {

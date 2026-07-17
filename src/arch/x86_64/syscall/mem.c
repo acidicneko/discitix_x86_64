@@ -26,6 +26,7 @@
 
 #define MAP_FAILED    ((void *)-1)
 
+// The below was obtained from multiple sources such as osdev wiki
 /*
  * Virtual address space layout (user-space):
  *
@@ -137,7 +138,6 @@ int64_t sys_brk(uint64_t addr, uint64_t arg2, uint64_t arg3,
                 uint64_t arg4, uint64_t arg5, uint64_t arg6)
 {
     (void)arg2; (void)arg3; (void)arg4; (void)arg5; (void)arg6;
-
     task_t *current = get_current_task();
     if (!current || !current->cr3)
         return -ESRCH;
@@ -145,45 +145,47 @@ int64_t sys_brk(uint64_t addr, uint64_t arg2, uint64_t arg3,
         current->brk_start   = USER_HEAP_FALLBACK;
         current->brk_current = USER_HEAP_FALLBACK;
     }
+    log("SYS_BRK", INFO, "task %d: addr=0x%xl brk_start=0x%xl brk_current=0x%xl\n\r",
+        current->id, addr, current->brk_start, current->brk_current);
 
     if (addr == 0)
         return (int64_t)current->brk_current;
-
-    if (addr < current->brk_start)
+    if (addr < current->brk_start) {
+        log("SYS_BRK", ERROR, "task %d: REJECTED addr=0x%xl < brk_start=0x%xl\n\r",
+            current->id, addr, current->brk_start);
         return (int64_t)current->brk_current;
-
+    }
     uint64_t old_brk = current->brk_current;
     uint64_t new_brk = addr;
-
     if (new_brk > old_brk) {
         uint64_t map_start = PAGE_ALIGN_UP(old_brk);
         uint64_t map_end   = PAGE_ALIGN_UP(new_brk);
-
         if (map_end > map_start) {
             size_t   n     = (map_end - map_start) / PAGE_SIZE;
             uint64_t flags = prot_to_flags(PROT_READ | PROT_WRITE);
-
+            log("SYS_BRK", INFO, "task %d: mapping %ul pages [0x%xl - 0x%xl)\n\r",
+                current->id, n, map_start, map_end);
             if (map_pages(current->cr3, map_start, n, flags) != 0) {
+                log("SYS_BRK", ERROR, "task %d: map_pages FAILED\n\r", current->id);
                 return (int64_t)old_brk;
             }
         }
-
     } else if (new_brk < old_brk) {
         uint64_t unmap_start = PAGE_ALIGN_UP(new_brk);
         uint64_t unmap_end   = PAGE_ALIGN_UP(old_brk);
-
         if (unmap_end > unmap_start) {
             size_t n = (unmap_end - unmap_start) / PAGE_SIZE;
             unmap_pages(current->cr3, unmap_start, n);
         }
     }
-
     current->brk_current = new_brk;
+    log("SYS_BRK", INFO, "task %d: SUCCESS new brk_current=0x%xl\n\r",
+        current->id, current->brk_current);
     return (int64_t)new_brk;
 }
 
 /* -------------------------------------------------------------------------
- * sys_mmap — map memory into the process address space.
+ * sys_mmap - map memory into the process address space.
  *
  * Currently only anonymous mappings are supported (MAP_ANONYMOUS).
  * The per-process bump pointer lives in task->mmap_base (add this field
@@ -215,8 +217,6 @@ int64_t sys_mmap(uint64_t addr, uint64_t length, uint64_t prot,
 
     if (flags & MAP_FIXED) {
         /*
-         * MAP_FIXED: use the provided address exactly.
-         * addr must be page-aligned and non-zero.
          * TODO: unmap any existing mapping in [addr, addr + length).
          */
         if (addr == 0 || (addr & ~PAGE_MASK))
