@@ -7,6 +7,17 @@
 #define NAME_MAX 255
 #define PATH_MAX 4096
 
+// open() flags, same values as newlib
+#define O_RDONLY    0x0000
+#define O_WRONLY    0x0001
+#define O_RDWR      0x0002
+#define O_ACCMODE   0x0003
+#define O_APPEND    0x0008
+#define O_CREAT     0x0200
+#define O_TRUNC     0x0400
+#define O_EXCL      0x0800
+#define O_DIRECTORY 0x200000
+
 // File types (matches DT_* values used in dirent)
 #define FT_UNKNOWN  0
 #define FT_FIFO     1
@@ -77,6 +88,7 @@ struct file_operations {
     int (*close)(inode_t*);
     long (*read)(file_t*, void*, size_t, uint64_t);
     long (*write)(file_t*, const void*, size_t, uint64_t);
+    int (*truncate)(inode_t*, uint64_t);
 };
 
 typedef struct {
@@ -117,6 +129,7 @@ int vfs_open(file_t **file, inode_t *inode, uint32_t flags);
 int vfs_close(file_t *file);
 long vfs_read(file_t *file, void *buf, size_t len);
 long vfs_write(file_t *file, const void *buf, size_t len);
+int vfs_truncate(inode_t *inode, uint64_t length);
 // int vfs_mkdir(inode_t *parent, const char *name);
 // int vfs_unlink(inode_t *parent, const char *name);
 
@@ -130,6 +143,8 @@ int vfs_create(const char *path, uint32_t mode);
 int vfs_mkdir(const char *path);
 int vfs_mkdir_at(inode_t *parent, const char *name);
 dentry_t *vfs_get_dentry(const char *path);
+dentry_t *vfs_walk(const char *path, int *err);
+dentry_t *vfs_resolve_parent(const char *path, char *buf, char **name, int *err);
 int vfs_unlink(const char *path);
 // Device registration
 int vfs_register_device(const char *path, inode_t *device_inode);

@@ -29,6 +29,9 @@
 #define SYS_DUP2        21
 #define SYS_GETPID      22
 #define SYS_FCNTL       23
+#define SYS_NANOSLEEP   24
+#define SYS_CLOCK_GETTIME 25
+#define SYS_FTRUNCATE   26
 
 #define MAX_SYSCALLS 32
 
@@ -98,6 +101,12 @@ int64_t sys_dup2(uint64_t oldfd, uint64_t newfd, uint64_t arg3,
 int64_t sys_getpid(uint64_t arg1, uint64_t arg2, uint64_t arg3,
                   uint64_t arg4, uint64_t arg5, uint64_t arg6);
 int64_t sys_fcntl(uint64_t fd, uint64_t cmd, uint64_t arg,
+                  uint64_t arg4, uint64_t arg5, uint64_t arg6);
+int64_t sys_ftruncate(uint64_t fd, uint64_t length, uint64_t arg3,
+                  uint64_t arg4, uint64_t arg5, uint64_t arg6);
+int64_t sys_nanosleep(uint64_t req_ptr, uint64_t rem_ptr, uint64_t arg3,
+                  uint64_t arg4, uint64_t arg5, uint64_t arg6);
+int64_t sys_clock_gettime(uint64_t clock_id, uint64_t ts_ptr, uint64_t arg3,
                   uint64_t arg4, uint64_t arg5, uint64_t arg6);
 
 #endif

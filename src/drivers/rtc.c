@@ -114,13 +114,17 @@ uint64_t get_unix_epoch(){
     struct rtc_time t;
     rtc_read(&t);
 
-    uint64_t epoch = 0;
-    epoch += (t.year - 1970) * 365 * 24 * 3600; // years
-    epoch += (t.month - 1) * 30 * 24 * 3600;     // months (approx)
-    epoch += (t.day - 1) * 24 * 3600;           // days
-    epoch += t.hour * 3600;                     // hours
-    epoch += t.min * 60;                       // minutes
-    epoch += t.sec;                            // seconds
+    // Days since 1970-01-01 for a proleptic Gregorian date (Howard
+    // Hinnant's days_from_civil), so month lengths and leap years are exact.
+    int64_t y = t.year;
+    int64_t m = t.month;
+    int64_t d = t.day;
+    y -= m <= 2;
+    int64_t era = (y >= 0 ? y : y - 399) / 400;
+    int64_t yoe = y - era * 400;
+    int64_t doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+    int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    int64_t days = era * 146097 + doe - 719468;
 
-    return epoch;
+    return (uint64_t)(days * 86400 + t.hour * 3600 + t.min * 60 + t.sec);
 }

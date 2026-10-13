@@ -49,7 +49,11 @@ typedef struct {
     char buf[1024];
     size_t buf_pos;
     size_t buf_len;
+    struct dirent ent;   /* what readdir() returns for this stream */
 } DIR;
+
+DIR *fdopendir(int fd);
+int dirfd(DIR *dirp);
 
 /* Not part of newlib's own dirent.h declarations -- this is our raw
  * syscall wrapper that readdir() is built on top of, declared here

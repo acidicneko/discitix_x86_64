@@ -48,23 +48,21 @@ $(LIBTCC1): $(BUILD)/libtcc1.o $(BUILD)/va_list.o
 	rm -f $@
 	$(AR) rcs $@ $^
 
-$(BUILD)/discitix_stubs.o: $(CURDIR)/discitix_stubs.c $(XTCC) $(LIBC)
-	$(XTCC) $(XTCC_FLAGS) -c $< -o $@
-
 # Linking needs libtcc1.a and the crt objects in one directory for -B, so
 # libtcc1.a also goes into the build sysroot next to libc's crt*.o.
 $(SYSROOT)/lib/libtcc1.a: $(LIBTCC1)
 	cp $< $@
 
 # CONFIG_TCC_SEMLOCK=0: Discitix has no threads (and no sem_*).
-$(BIN): $(XTCC) $(BUILD)/discitix_stubs.o $(SYSROOT)/lib/libtcc1.a $(LIBC) $(CRT0) \
+$(BIN): $(XTCC) $(SYSROOT)/lib/libtcc1.a $(LIBC) $(CRT0) \
         $(wildcard $(SRC)/*.c $(SRC)/*.h)
 	$(XTCC) -DONE_SOURCE=1 -DCONFIG_TCC_SEMLOCK=0 $(XTCC_FLAGS) -I$(BUILD) \
 		-B$(SYSROOT)/lib -L$(SYSROOT)/lib -static \
-		-o $@ $(SRC)/tcc.c $(BUILD)/discitix_stubs.o -lc -lm
+		-o $@ $(SRC)/tcc.c -lc -lm
 
 install: all
-	install -Dm755 $(BIN) $(DESTDIR)/bin/tcc
+	@mkdir -p $(DESTDIR)/bin
+	$(INSTALL_PROGRAM) $(BIN) $(DESTDIR)/bin/tcc
 	install -Dm644 $(LIBTCC1) $(DESTDIR)$(TCCDIR)/libtcc1.a
 	mkdir -p $(DESTDIR)$(TCCDIR)/include
 	cp $(SRC)/include/*.h $(DESTDIR)$(TCCDIR)/include/

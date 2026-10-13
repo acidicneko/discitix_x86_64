@@ -21,11 +21,13 @@ fi
 mkdir -p "$WORK"
 cd "$WORK"
 
-if [ ! -f "$TARBALL" ]; then
-    echo "==> Downloading newlib $VERSION..."
-    wget "https://sourceware.org/pub/newlib/$TARBALL"
+if [ ! -d "newlib-$VERSION" ]; then
+    if [ ! -f "$TARBALL" ]; then
+        echo "==> Downloading newlib $VERSION..."
+        wget "https://sourceware.org/pub/newlib/$TARBALL"
+    fi
+    tar -xf "$TARBALL"
 fi
-[ -d "newlib-$VERSION" ] || tar -xf "$TARBALL"
 
 echo "==> Configuring newlib (prefix: $PREFIX)..."
 mkdir -p build
@@ -42,6 +44,7 @@ RANLIB_FOR_TARGET="x86_64-linux-gnu-ranlib" \
     --disable-newlib-supplied-syscalls \
     --disable-nls \
     --enable-newlib-io-long-long \
+    --enable-newlib-io-c99-formats \
     --enable-newlib-register-fini \
     --disable-multilib
 

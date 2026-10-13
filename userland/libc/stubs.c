@@ -7,8 +7,12 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <termios.h>
-#undef errno
-extern int errno;
+#include <dirent.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <limits.h>
+#include "internal.h"
 
 // ============================================================================
 // 1. YOUR KERNEL SYSCALL INTERFACE & NUMBERS
@@ -37,6 +41,9 @@ extern int errno;
 #define SYS_DUP2       21
 #define SYS_GETPID     22
 #define SYS_FCNTL      23
+#define SYS_NANOSLEEP  24
+#define SYS_CLOCK_GETTIME 25
+#define SYS_FTRUNCATE  26
 
 static inline long _syscall0(long num) {
     long ret;
@@ -146,15 +153,71 @@ int lstat(const char *__restrict path, struct stat *__restrict buf) {
 // ============================================================================
 // 3. CORE FILE I/O STUBS
 // ============================================================================
+// ----------------------------------------------------------------------------
+// fd -> path table. The kernel has no *at() syscalls, so libc remembers the
+// absolute path each fd was opened with; openat()/fstatat()/... in compat.c
+// turn (dirfd, name) into path(dirfd)/name. Inherited across fork, lost on
+// exec (only matters for directory fds, which sbase never passes on).
+// ----------------------------------------------------------------------------
+#define FDPATH_MAX 64
+static char *fd_paths[FDPATH_MAX];
+
+char *getcwd(char *buf, size_t size);  // below
+
+static void fdpath_clear(int fd) {
+    if (fd < 0 || fd >= FDPATH_MAX) return;
+    free(fd_paths[fd]);
+    fd_paths[fd] = NULL;
+}
+
+static void fdpath_set(int fd, const char *path) {
+    if (fd < 0 || fd >= FDPATH_MAX || !path) return;
+    fdpath_clear(fd);
+    char cwd[PATH_MAX];
+    if (path[0] != '/' && getcwd(cwd, sizeof cwd)) {
+        size_t n = strlen(cwd) + 1 + strlen(path) + 1;
+        char *p = malloc(n);
+        if (!p) return;
+        strcpy(p, cwd);
+        if (n > 2 && p[strlen(p) - 1] != '/') strcat(p, "/");
+        strcat(p, path);
+        fd_paths[fd] = p;
+    } else {
+        fd_paths[fd] = strdup(path);
+    }
+}
+
+static void fdpath_copy(int from, int to) {
+    if (from < 0 || from >= FDPATH_MAX) { fdpath_clear(to); return; }
+    if (fd_paths[from]) fdpath_set(to, fd_paths[from]);
+    else fdpath_clear(to);
+}
+
+const char *__discitix_fd_path(int fd) {
+    if (fd < 0 || fd >= FDPATH_MAX) return NULL;
+    return fd_paths[fd];
+}
+
 int open(const char *path, int flags, ...) {
-    long ret = _syscall3(SYS_OPEN, (long)path, (long)flags, 0);
+    mode_t mode = 0;
+    if (flags & O_CREAT) {
+        va_list ap;
+        va_start(ap, flags);
+        mode = (mode_t)va_arg(ap, int);
+        va_end(ap);
+    }
+    long ret = _syscall3(SYS_OPEN, (long)path, (long)flags, (long)mode);
     if (ret < 0) { errno = (int)-ret; return -1; }
+    fdpath_set((int)ret, path);
+    // The kernel only tracks close-on-exec via fcntl
+    if (flags & O_CLOEXEC) _syscall3(SYS_FCNTL, ret, F_SETFD, FD_CLOEXEC);
     return (int)ret;
 }
 
 int close(int fd) {
     long ret = _syscall1(SYS_CLOSE, (long)fd);
     if (ret < 0) { errno = (int)-ret; return -1; }
+    fdpath_clear(fd);
     return (int)ret;
 }
 
@@ -194,7 +257,7 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 
 int waitpid(int pid, int *status, int options) {
    long ret = _syscall3(SYS_WAITPID, (long)pid, (long)status, (long)options);
-   if (ret < 0) { errno = ECHILD; return -1; }
+   if (ret < 0) { errno = (int)-ret; return -1; }
    return (int)ret;
 }
 
@@ -308,102 +371,66 @@ clock_t times(struct tms *buf) {
 }
 
 
-#define DT_UNKNOWN  0
-#define DT_FIFO     1
-#define DT_CHR      2
-#define DT_DIR      4
-#define DT_BLK      6
-#define DT_REG      8
-#define DT_LNK      10
-#define DT_SOCK     12
-#define DT_WHT      14
-
-// Linux dirent64 structure - matches kernel's struct linux_dirent64
-// Layout: d_ino(8) + d_off(8) + d_reclen(2) + d_type(1) + d_name[]
-struct dirent64 {
-    uint64_t d_ino;      // Inode number
-    int64_t  d_off;      // Offset to next dirent  
-    uint16_t d_reclen;   // Length of this dirent (including name)
-    uint8_t  d_type;     // File type (DT_*)
-    char     d_name[];   // Filename (null-terminated, flexible array)
-};
-
-// Simplified dirent for readdir() compatibility
-struct dirent {
-    uint64_t d_ino;
-    uint8_t  d_type;
-    char     d_name[256];
-};
-
-// Directory stream
-typedef struct {
-    int fd;
-    char buf[1024];
-    size_t buf_pos;
-    size_t buf_len;
-} DIR;
-
 // getdents64 - raw syscall wrapper
 long getdents64(int fd, void *buf, size_t count) {
     return _syscall3(SYS_GETDENTS64, (long)fd, (long)buf, (long)count);
 }
 
-// opendir - open a directory stream
-DIR *opendir(const char *name) {
-    int fd = (int)_syscall2(SYS_OPEN, (long)name, 0);  // O_RDONLY
-    if (fd < 0) return 0;
-    
-    // Simple static allocation (only one DIR at a time)
-    static DIR dir_buf;
-    dir_buf.fd = fd;
-    dir_buf.buf_pos = 0;
-    dir_buf.buf_len = 0;
-    return &dir_buf;
+// fdopendir - wrap an already-open directory fd (it's closed by closedir)
+DIR *fdopendir(int fd) {
+    DIR *d = calloc(1, sizeof *d);
+    if (!d) { errno = ENOMEM; return NULL; }
+    d->fd = fd;
+    return d;
 }
 
-// readdir - read next directory entry
+// opendir - open a directory stream. Heap-allocated so several can be open
+// at once (recursive walks: find, rm -r, cp -r, du, grep -r).
+DIR *opendir(const char *name) {
+    int fd = open(name, O_RDONLY);
+    if (fd < 0) return NULL;
+    DIR *d = fdopendir(fd);
+    if (!d) close(fd);
+    return d;
+}
+
+// readdir - read next directory entry (stored per stream)
 struct dirent *readdir(DIR *dirp) {
-    if (!dirp) return 0;
-    
-    static struct dirent result;
-    
+    if (!dirp) return NULL;
+
     // Refill buffer if exhausted
     if (dirp->buf_pos >= dirp->buf_len) {
         long nread = getdents64(dirp->fd, dirp->buf, sizeof(dirp->buf));
-        if (nread <= 0) return 0;
+        if (nread <= 0) return NULL;
         dirp->buf_len = (size_t)nread;
         dirp->buf_pos = 0;
     }
-    
-    // Parse current dirent64 entry from buffer
-    struct dirent64 *d64 = (struct dirent64*)(dirp->buf + dirp->buf_pos);
-    
-    result.d_ino = d64->d_ino;
-    result.d_type = d64->d_type;
-    
-    // Clear the name buffer first to avoid leftover characters
-    for (size_t i = 0; i < 256; i++) {
-        result.d_name[i] = '\0';
-    }
-    
-    // Copy the name (null-terminated by kernel)
-    for (size_t i = 0; i < 255 && d64->d_name[i]; i++) {
-        result.d_name[i] = d64->d_name[i];
-    }
-    
-    // Advance to next entry
-    dirp->buf_pos += d64->d_reclen;
-    return &result;
+
+    struct kernel_dirent *kd = (struct kernel_dirent *)(dirp->buf + dirp->buf_pos);
+    struct dirent *ent = &dirp->ent;
+
+    ent->d_ino = kd->d_ino;
+    ent->d_type = kd->d_type;
+    size_t i = 0;
+    for (; i < sizeof(ent->d_name) - 1 && kd->d_name[i]; i++)
+        ent->d_name[i] = kd->d_name[i];
+    ent->d_name[i] = '\0';
+
+    dirp->buf_pos += kd->d_reclen;
+    return ent;
 }
 
 // closedir - close directory stream
 int closedir(DIR *dirp) {
-    if (!dirp) return -1;
-    int ret = (int)_syscall1(SYS_CLOSE, dirp->fd);
-    dirp->fd = -1;
-    dirp->buf_pos = 0;
-    dirp->buf_len = 0;
+    if (!dirp) { errno = EBADF; return -1; }
+    int ret = close(dirp->fd);
+    free(dirp);
     return ret;
+}
+
+int dirfd(DIR *dirp) {
+    if (!dirp) { errno = EINVAL; return -1; }
+    return dirp->fd;
 }
 
 int mkdir(const char *path, mode_t mode) {
@@ -438,10 +465,42 @@ off_t lseek(int fd, off_t offset, int whence) {
 
 
 
+int clock_gettime(clockid_t clock_id, struct timespec *tp) {
+    long ret = _syscall2(SYS_CLOCK_GETTIME, (long)clock_id, (long)tp);
+    if (ret < 0) { errno = (int)-ret; return -1; }
+    return 0;
+}
+
+int ftruncate(int fd, off_t length) {
+    long ret = _syscall2(SYS_FTRUNCATE, (long)fd, (long)length);
+    if (ret < 0) { errno = (int)-ret; return -1; }
+    return 0;
+}
+
+int truncate(const char *path, off_t length) {
+    int fd = open(path, O_WRONLY);
+    if (fd < 0) return -1;
+    int ret = ftruncate(fd, length);
+    int saved = errno;
+    close(fd);
+    errno = saved;
+    return ret;
+}
+
+int nanosleep(const struct timespec *req, struct timespec *rem) {
+    long ret = _syscall2(SYS_NANOSLEEP, (long)req, (long)rem);
+    if (ret < 0) { errno = (int)-ret; return -1; }
+    return 0;
+}
+
+// Also what newlib's time() ends up calling
 int gettimeofday(struct timeval *restrict tv, void *restrict tz) {
+    (void)tz;
     if (tv) {
-        tv->tv_sec = 0;  
-        tv->tv_usec = 0;
+        struct timespec ts;
+        if (clock_gettime(CLOCK_REALTIME, &ts) < 0) return -1;
+        tv->tv_sec = ts.tv_sec;
+        tv->tv_usec = ts.tv_nsec / 1000;
     }
     return 0;
 }
@@ -477,6 +536,7 @@ int dup2(int oldfd, int newfd) {
         return -1;
     }
 
+    if (oldfd != newfd) fdpath_copy(oldfd, newfd);
     return (int)ret;
 }
 
@@ -503,6 +563,7 @@ int fcntl(int fd, int cmd, ...) {
     va_end(ap);
     long ret = _syscall3(SYS_FCNTL, (long)fd, (long)cmd, arg);
     if (ret < 0) { errno = (int)-ret; return -1; }
+    if (cmd == F_DUPFD || cmd == F_DUPFD_CLOEXEC) fdpath_copy(fd, (int)ret);
     return (int)ret;
 }
 

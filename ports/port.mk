@@ -15,6 +15,11 @@ DESTDIR ?= $(TOP)/userland/sysroot
 CROSS ?= x86_64-linux-gnu-
 CC    := $(CROSS)gcc
 AR    := $(CROSS)ar
+STRIP := $(CROSS)strip
+
+# Binaries are stripped as they go into the image (the copies in each
+# build/ dir keep their debug info).
+INSTALL_PROGRAM := install -m755 -s --strip-program=$(STRIP)
 
 TARGET_CFLAGS  := -I$(SYSROOT)/include -nostdlib -ffreestanding -mno-red-zone \
                   -fno-pic -no-pie

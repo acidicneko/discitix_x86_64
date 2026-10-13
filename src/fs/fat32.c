@@ -5,6 +5,7 @@
 #include <mm/liballoc.h>
 #include <libk/stdio.h>
 #include <sys/stat.h>
+#include <libk/errno.h>
 
 static uint32_t fat_start_lba;
 static uint32_t data_start_lba;
@@ -406,10 +407,11 @@ void mount_filesystem(void) {
 }
 
 file_operations_t fat32_file_ops = {
-    .read  = fat32_vfs_read,
-    .write = fat32_vfs_write,
-    .open  = NULL,
-    .close = NULL
+    .read     = fat32_vfs_read,
+    .write    = fat32_vfs_write,
+    .open     = NULL,
+    .close    = NULL,
+    .truncate = fat32_vfs_truncate
 };
 
 inode_operations_t fat32_inode_ops = {
@@ -939,21 +941,23 @@ static bool fat32_add_entry_named(uint32_t dir_cluster, const char *long_name,
     return true;
 }
 
+static bool fat32_exists(inode_t *parent, const char *name) {
+    inode_t *found = fat32_vfs_lookup(parent, name);
+    if (!found) return false;
+    kfree(found->private);
+    kfree(found);
+    return true;
+}
+
 int fat32_vfs_create(inode_t *parent, const char *name, uint32_t mode) {
     (void)mode;
-    if (!parent || parent->type != FT_DIR) {
-        printf("fat32_vfs_create: bad parent for '%s'\n", name);
-        return -1;
-    }
-    if (fat32_vfs_lookup(parent, name) != NULL) {
-        printf("fat32_vfs_create: '%s' already exists (lookup matched)\n", name);
-        return -1;
-    }
+    if (!parent || parent->type != FT_DIR) return -ENOTDIR;
+    if (fat32_exists(parent, name)) return -EEXIST;
 
     uint32_t new_cluster = fat32_allocate_cluster();
     if (new_cluster == 0) {
-        printf("fat32_vfs_create: fat32_allocate_cluster failed (disk full?) for '%s'\n", name);
-        return -1;
+        printf("fat32_vfs_create: disk full, cannot create '%s'\n", name);
+        return -ENOSPC;
     }
 
     if (!fat32_add_entry_named(parent->ino, name, FAT_ATTR_ARCHIVE, new_cluster)) {
@@ -961,7 +965,7 @@ int fat32_vfs_create(inode_t *parent, const char *name, uint32_t mode) {
                name, name_fits_83(name));
         fat32_free_chain(new_cluster);
         fat32_fat_sync();
-        return -1;
+        return -ENOSPC;
     }
     fat32_fat_sync();
 
@@ -969,16 +973,16 @@ int fat32_vfs_create(inode_t *parent, const char *name, uint32_t mode) {
 }
 
 int fat32_vfs_mkdir(inode_t *parent, const char *name) {
-    if (!parent || parent->type != FT_DIR) return -1;
-    if (fat32_vfs_lookup(parent, name) != NULL) return -1;
+    if (!parent || parent->type != FT_DIR) return -ENOTDIR;
+    if (fat32_exists(parent, name)) return -EEXIST;
 
     uint32_t new_cluster = fat32_allocate_cluster();
-    if (new_cluster == 0) return -1;
+    if (new_cluster == 0) return -ENOSPC;
 
     if (!fat32_add_entry_named(parent->ino, name, FAT_ATTR_DIRECTORY, new_cluster)) {
         fat32_free_chain(new_cluster);
         fat32_fat_sync();
-        return -1;
+        return -ENOSPC;
     }
 
     /* "." and ".." are always plain 8.3 entries, never long names. */
@@ -989,8 +993,21 @@ int fat32_vfs_mkdir(inode_t *parent, const char *name) {
     return 0;
 }
 
+static void fat32_set_size(inode_t *inode, uint32_t size) {
+    inode->size = size;
+    if (!inode->private) return;
+
+    fat32_node_info_t *info = (fat32_node_info_t *)inode->private;
+    uint8_t sector_buf[512];
+    ata_read_sector(info->dir_entry_lba, sector_buf);
+    ((fat32_dir_t *)(sector_buf + info->dir_entry_offset))->file_size = size;
+    ata_write_sector(info->dir_entry_lba, sector_buf);
+}
+
 long fat32_vfs_write(file_t *file, const void *buf, size_t len, uint64_t offset) {
-    if (!file || !file->inode || !buf || len == 0) return -1;
+    if (!file || !file->inode || !buf) return -EINVAL;
+    if (len == 0) return 0;
+    if (offset + len > 0xFFFFFFFFull) return -EFBIG;
 
     uint32_t current_cluster = file->inode->ino;
     uint32_t file_size = file->inode->size;
@@ -1010,7 +1027,7 @@ long fat32_vfs_write(file_t *file, const void *buf, size_t len, uint64_t offset)
 
         for (uint32_t i = current_clusters_owned; i < needed_clusters; i++) {
             uint32_t new_cluster = fat32_allocate_cluster();
-            if (new_cluster == 0) { fat32_fat_sync(); return -1; }
+            if (new_cluster == 0) { fat32_fat_sync(); return -ENOSPC; }
 
             set_next_cluster(tail, new_cluster);
             tail = new_cluster;
@@ -1052,16 +1069,7 @@ long fat32_vfs_write(file_t *file, const void *buf, size_t len, uint64_t offset)
     }
 
     if (offset + bytes_written > file->inode->size) {
-        file->inode->size = offset + bytes_written;
-
-        if (file->inode->private) {
-            fat32_node_info_t *info = (fat32_node_info_t *)file->inode->private;
-
-            ata_read_sector(info->dir_entry_lba, sector_buf);
-            fat32_dir_t *entry = (fat32_dir_t *)(sector_buf + info->dir_entry_offset);
-            entry->file_size = file->inode->size;
-            ata_write_sector(info->dir_entry_lba, sector_buf);
-        }
+        fat32_set_size(file->inode, offset + bytes_written);
     }
 
     fat32_fat_sync();
@@ -1079,8 +1087,46 @@ static void fat32_free_chain(uint32_t start_cluster) {
     }
 }
 
+int fat32_vfs_truncate(inode_t *inode, uint64_t length) {
+    if (length > 0xFFFFFFFFull) return -EFBIG;
+    uint32_t size = inode->size;
+    if (length == size) return 0;
+
+    if (length > size) {
+        // Growing: write zeros, which allocates and fills the new clusters
+        static const uint8_t zero[512];
+        file_t f = { .inode = inode, .flags = O_WRONLY };
+        uint64_t off = size;
+        while (off < length) {
+            size_t n = (length - off > sizeof zero) ? sizeof zero : (size_t)(length - off);
+            long w = fat32_vfs_write(&f, zero, n, off);
+            if (w <= 0) return w < 0 ? (int)w : -EIO;
+            off += (uint64_t)w;
+        }
+        return 0;
+    }
+
+    // Shrinking: keep enough clusters for the new size (a file always owns
+    // its first cluster, it is the inode number) and free the rest.
+    uint32_t cluster_size = sectors_per_cluster * 512;
+    uint32_t keep = (uint32_t)((length + cluster_size - 1) / cluster_size);
+    if (keep == 0) keep = 1;
+
+    uint32_t last = inode->ino;
+    for (uint32_t i = 1; i < keep; i++) last = get_next_cluster(last);
+
+    uint32_t rest = get_next_cluster(last);
+    if (rest >= 2 && rest < FAT32_EOC_MARKER) {
+        set_next_cluster(last, FAT32_EOC_MARKER);
+        fat32_free_chain(rest);
+    }
+    fat32_fat_sync();
+    fat32_set_size(inode, (uint32_t)length);
+    return 0;
+}
+
 int fat32_vfs_unlink(inode_t *parent, const char *name) {
-    if (!parent || parent->type != FT_DIR) return -1;
+    if (!parent || parent->type != FT_DIR) return -ENOTDIR;
 
     char target_83[11];
     format_83_name(name, target_83);
@@ -1099,7 +1145,7 @@ int fat32_vfs_unlink(inode_t *parent, const char *name) {
             fat32_dir_t *entries = (fat32_dir_t *)sector_buf;
 
             for (int e = 0; e < 16; e++) {
-                if (entries[e].name[0] == 0x00) return -1;
+                if (entries[e].name[0] == 0x00) return -ENOENT;
                 if ((unsigned char)entries[e].name[0] == 0xE5) { lfn_accum_reset(&acc); continue; }
 
                 bool has_long = lfn_feed_entry(&acc, &entries[e], cluster_lba + i, (uint8_t)e, long_name);
@@ -1136,5 +1182,5 @@ int fat32_vfs_unlink(inode_t *parent, const char *name) {
         }
         current_cluster = get_next_cluster(current_cluster);
     }
-    return -1;
+    return -ENOENT;
 }

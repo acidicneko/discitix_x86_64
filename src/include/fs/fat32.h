@@ -86,4 +86,5 @@ long fat32_vfs_write(file_t *file, const void *buf, size_t len, uint64_t offset)
 int fat32_vfs_create(inode_t *parent, const char *name, uint32_t mode);
 int fat32_vfs_mkdir(inode_t *parent, const char *name);
 int fat32_vfs_unlink(inode_t *parent, const char *name);
+int fat32_vfs_truncate(inode_t *inode, uint64_t length);
 #endif // __FAT32__

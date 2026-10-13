@@ -6,12 +6,7 @@
 #include <libk/utils.h>
 #include <stdint.h>
 #include <string.h>
-#define EPERM    1
-#define ENOENT   2
-#define ESRCH    3
-#define ENOMEM  12
-#define EINVAL  22
-#define ENOSYS  38
+#include <libk/errno.h>
 /* mmap protection flags */
 #define PROT_NONE   0x0
 #define PROT_READ   0x1

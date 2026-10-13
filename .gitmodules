@@ -14,3 +14,6 @@
 [submodule "dash"]
 	path = ports/dash/src
 	url = git://git.kernel.org/pub/scm/utils/dash/dash.git
+[submodule "ports/suckless_utils/src"]
+	path = ports/suckless_utils/src
+	url = git://git.suckless.org/sbase

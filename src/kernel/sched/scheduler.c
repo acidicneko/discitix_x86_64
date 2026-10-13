@@ -378,3 +378,15 @@ void reap_orphan_zombies(void) {
         } while (task_list && t != task_list);
     } while (found && task_list);
 }
+
+void sched_wakeup(void *chan) {
+    if (!task_list) return;
+    task_t *t = task_list;
+    do {
+        if (t->state == TASK_BLOCKED && t->wait_chan == chan) {
+            t->wait_chan = NULL;
+            t->state = TASK_RUNNABLE;
+        }
+        t = t->next;
+    } while (t != task_list);
+}

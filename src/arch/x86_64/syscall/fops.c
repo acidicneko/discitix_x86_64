@@ -5,6 +5,7 @@
 #include <libk/string.h>
 #include <kernel/vfs/vfs.h>
 #include <arch/x86_64/regs.h>
+#include <libk/errno.h>
 
 struct user_stat {
     uint32_t st_ino;
@@ -27,26 +28,22 @@ int64_t sys_write(uint64_t fd, uint64_t buf, uint64_t count,
     // TODO: validate user pointer
     const char* user_buf = (const char*)buf;
     
-    // FIXME: this is probably redundant as we can just write to /ttyX files
-    if (fd == 1 || fd == 2) {
-        // stdout or stderr - write to current TTY
-        tty_t* tty = get_current_tty();
-        if (tty) {
-            for (size_t i = 0; i < count; i++) {
-                tty_putchar(user_buf[i]);
-            }
-            return (int64_t)count;
-        }
-        return -1;
-    }
-    
-    // Handle other file descriptors via VFS
     task_t *current = get_current_task();
     if (!current || fd >= MAX_FDS || !current->fd_table[fd]) {
-        return -1;
+        return -EBADF;
     }
-    
     file_t *f = current->fd_table[fd];
+    if ((f->flags & O_ACCMODE) == O_RDONLY) return -EBADF;
+
+    // TTYs take the fast tty_putchar path (handles escapes, no full repaint)
+    if (f->inode && f->inode->f_ops && f->inode->f_ops->write == tty_write) {
+        if (!get_current_tty()) return -EIO;
+        for (size_t i = 0; i < count; i++) {
+            tty_putchar(user_buf[i]);
+        }
+        return (int64_t)count;
+    }
+
     return vfs_write(f, user_buf, count);
 }
 
@@ -56,73 +53,74 @@ int64_t sys_read(uint64_t fd, uint64_t buf, uint64_t count,
     char* user_buf = (char*)buf;
 
     task_t *current = get_current_task();
-    if (!current) return -1;
-    
-    // Handle all file descriptors via fd_table (0=stdin, 1=stdout, 2=stderr, 3+=files)
-    if (fd >= MAX_FDS || !current->fd_table[fd]) {
-        return -1;
-    }
-    
+    if (!current) return -ESRCH;
+    if (fd >= MAX_FDS || !current->fd_table[fd]) return -EBADF;
+
     file_t *f = current->fd_table[fd];
     return vfs_read(f, user_buf, count);
 }
-#define O_RDONLY    0x0000
-#define O_WRONLY    0x0001
-#define O_RDWR      0x0002
-#define O_APPEND    0x0008
-#define O_CREAT     0x0200  // 512 in decimal
-#define O_TRUNC     0x0400  // 1024 in decimal
-
-#define ENOENT 2
 
 
 int64_t sys_open(uint64_t path_ptr, uint64_t flags, uint64_t mode,
                  uint64_t arg4, uint64_t arg5, uint64_t arg6) {
-    (void)mode; (void)arg4; (void)arg5; (void)arg6;
-    log("SYS_OPEN",INFO,"path='%s', flags=0x%xl (decimal %d)\n\r", (const char*)path_ptr, flags, flags);
+    (void)arg4; (void)arg5; (void)arg6;
     const char *path = (const char*)path_ptr;
     task_t *current = get_current_task();
-    
-    if (!current || !path) return -1;
-    
-    // Find free file descriptor (start from 3, 0-2 are std streams)
+
+    if (!current) return -ESRCH;
+    if (!path) return -EFAULT;
+    log("SYS_OPEN",INFO,"path='%s', flags=0x%xl\n\r", path, flags);
+
     int fd = -1;
-    for (int i = 3; i < MAX_FDS; i++) {
+    for (int i = 0; i < MAX_FDS; i++) {
         if (!current->fd_table[i]) {
             fd = i;
             break;
         }
     }
-    if (fd < 0) {
-        log("SYS_OPEN",ERROR,"no free fd\n\r");
-        return -1;  // No free file descriptors
-    }
-    
+    if (fd < 0) return -EMFILE;
+
     inode_t *inode = NULL;
-    if (vfs_lookup_path(path, &inode) != 0 || !inode) {
-      if (flags & O_CREAT) {
-            if (vfs_create(path, mode) != 0) {
-                log("SYS_OPEN",ERROR, "vfs_create failed for %s\n\r", path);
-                return -1;
-            }
-            if (vfs_lookup_path(path, &inode) != 0 || !inode) {
-                return -1;
-            }
-        } else {
-            log("SYS_OPEN", ERROR,"file not found: %s\n\r", path);
-            return -ENOENT; 
-        }
-    } 
-    file_t *f = NULL;
-    if (vfs_open(&f, inode, (uint32_t)flags) != 0 || !f) {
-        log("SYS_OPEN",ERROR, "vfs_open failed\n\r");
-        return -1;
+    int err = vfs_lookup_path(path, &inode);
+    if (err == 0 && (flags & O_CREAT) && (flags & O_EXCL)) return -EEXIST;
+    if (err == -ENOENT && (flags & O_CREAT)) {
+        err = vfs_create(path, mode);
+        if (err == 0) err = vfs_lookup_path(path, &inode);
     }
-    
+    if (err != 0) {
+        log("SYS_OPEN", ERROR, "open '%s' failed: %d\n\r", path, err);
+        return err;
+    }
+
+    int writing = (flags & O_ACCMODE) != O_RDONLY;
+    if (inode->type == FT_DIR && writing) return -EISDIR;
+    if ((flags & O_DIRECTORY) && inode->type != FT_DIR) return -ENOTDIR;
+
+    if ((flags & O_TRUNC) && writing && inode->type == FT_REG) {
+        err = vfs_truncate(inode, 0);
+        if (err != 0) return err;
+    }
+
+    file_t *f = NULL;
+    err = vfs_open(&f, inode, (uint32_t)flags);
+    if (err != 0) return err;
+
     current->fd_table[fd] = f;
-    
-    log("SYS_OPEN",INFO, "opened '%s' as fd %d\n\r", path, fd);
+    current->fd_cloexec &= ~(1u << fd);
     return fd;
+}
+
+int64_t sys_ftruncate(uint64_t fd, uint64_t length, uint64_t arg3,
+                      uint64_t arg4, uint64_t arg5, uint64_t arg6) {
+    (void)arg3; (void)arg4; (void)arg5; (void)arg6;
+    task_t *current = get_current_task();
+    if (!current) return -ESRCH;
+    if (fd >= MAX_FDS || !current->fd_table[fd]) return -EBADF;
+    if ((int64_t)length < 0) return -EINVAL;
+
+    file_t *f = current->fd_table[fd];
+    if ((f->flags & O_ACCMODE) == O_RDONLY) return -EINVAL;
+    return vfs_truncate(f->inode, length);
 }
 
 int64_t sys_close(uint64_t fd, uint64_t arg2, uint64_t arg3,
@@ -131,13 +129,12 @@ int64_t sys_close(uint64_t fd, uint64_t arg2, uint64_t arg3,
     
     task_t *current = get_current_task();
     
-    if (!current) return -1;
+    if (!current) return -ESRCH;
     
-    // Don't allow closing stdin/stdout/stderr this way
-    if (fd < 3) return -1;
-    
+    // fds 0-2 can be closed like any other: files are refcounted, so this
+    // only drops this process's reference to the terminal.
     if (fd >= MAX_FDS || !current->fd_table[fd]) {
-        return -1;  // Invalid fd
+        return -EBADF;
     }
     
     file_t *f = current->fd_table[fd];
@@ -151,20 +148,11 @@ int64_t sys_close(uint64_t fd, uint64_t arg2, uint64_t arg3,
 int64_t sys_mkdir(uint64_t path_ptr, uint64_t mode, uint64_t arg3,
                   uint64_t arg4, uint64_t arg5, uint64_t arg6) {
     (void)mode; (void)arg3; (void)arg4; (void)arg5; (void)arg6;
-    
     const char *path = (const char*)path_ptr;
-    task_t *current = get_current_task();
-    
-    if (!current || !path) return -1;
-    
-    log("SYS_MKDIR", INFO, "path='%s'", path);
-    
-    if (vfs_mkdir(path) != 0) {
-        return -1;     
-    }
+    if (!path) return -EFAULT;
 
-    
-    return 0; // Success!
+    log("SYS_MKDIR", INFO, "path='%s'\n\r", path);
+    return vfs_mkdir(path);
 }
 
 static void fill_stat_from_inode(struct user_stat *st, inode_t *inode) {
@@ -208,13 +196,11 @@ int64_t sys_stat(uint64_t path_ptr, uint64_t buf_ptr, uint64_t arg3,
     const char *path = (const char*)path_ptr;
     struct user_stat *buf = (struct user_stat*)buf_ptr;
     
-    if (!path || !buf) return -1;
-    
-    // Look up path in VFS
+    if (!path || !buf) return -EFAULT;
+
     inode_t *inode = NULL;
-    if (vfs_lookup_path(path, &inode) != 0 || !inode) {
-        return -1;
-    }
+    int err = vfs_lookup_path(path, &inode);
+    if (err != 0) return err;
     
     fill_stat_from_inode(buf, inode);
     return 0;
@@ -226,16 +212,13 @@ int64_t sys_fstat(uint64_t fd, uint64_t buf_ptr, uint64_t arg3,
     (void)arg3; (void)arg4; (void)arg5; (void)arg6;
     
     struct user_stat *buf = (struct user_stat*)buf_ptr;
-    
+    if (!buf) return -EFAULT;
+
     task_t *current = get_current_task();
-    if (!current || fd >= MAX_FDS || !current->fd_table[fd]) {
-        return -1;
-    }
-    
+    if (!current || fd >= MAX_FDS || !current->fd_table[fd]) return -EBADF;
+
     file_t *f = current->fd_table[fd];
-    if (!f->inode) {
-        return -1;
-    }
+    if (!f->inode) return -EBADF;
     
     fill_stat_from_inode(buf, f->inode);
     return 0;
@@ -246,21 +229,14 @@ int64_t sys_getdents64(uint64_t fd, uint64_t buf_ptr, uint64_t count,
     (void)arg4; (void)arg5; (void)arg6;
     
     task_t *current = get_current_task();
-    if (!current || fd >= MAX_FDS || !current->fd_table[fd]) {
-        return -1;
-    }
-    
+    if (!current || fd >= MAX_FDS || !current->fd_table[fd]) return -EBADF;
+    if (!buf_ptr) return -EFAULT;
+
     file_t *f = current->fd_table[fd];
     inode_t *inode = f->inode;
-    
-    if (!inode || !inode->is_directory) {
-        log("SYS_GETDETNS64", ERROR, "fd %d is not a directory\n\r", (int)fd);
-        return -1;
-    }
-    if (!inode->i_ops || !inode->i_ops->getdents) {
-        log("SYS_GETDENTS64",ERROR ,"filesystem does not support getdents\n\r");
-        return -1;
-    }
+
+    if (!inode || !inode->is_directory) return -ENOTDIR;
+    if (!inode->i_ops || !inode->i_ops->getdents) return -EINVAL;
 
     return inode->i_ops->getdents(inode, &f->offset, (void*)buf_ptr, count);
 }
@@ -271,8 +247,8 @@ int64_t sys_chdir(uint64_t path_ptr, uint64_t arg2, uint64_t arg3,
     (void)arg2; (void)arg3; (void)arg4; (void)arg5; (void)arg6;
     
     const char *path = (const char *)path_ptr;
-    if (!path) return -1;
-    
+    if (!path) return -EFAULT;
+
     return vfs_chdir(path);
 }
 
@@ -281,11 +257,8 @@ int64_t sys_getcwd(uint64_t buf_ptr, uint64_t size, uint64_t arg3,
     (void)arg3; (void)arg4; (void)arg5; (void)arg6;
     
     char *buf = (char *)buf_ptr;
-    if (!buf || size == 0) return -1;
-    
-    if (vfs_getcwd(buf, size) != 0) {
-        return -1;
-    }
+    int err = vfs_getcwd(buf, size);
+    if (err != 0) return err;
     
     return (int64_t)buf_ptr;  // Return pointer to buffer on success (like Linux)
 }
@@ -295,31 +268,25 @@ int64_t sys_unlink(uint64_t path_ptr, uint64_t arg2, uint64_t arg3,
     (void)arg2; (void)arg3; (void)arg4; (void)arg5; (void)arg6;
     
     const char *path = (const char*)path_ptr;
-    if (!path) return -1;
-    
-    if (vfs_unlink(path) != 0) {
-        return -ENOENT;
-    }
-    return 0;
+    if (!path) return -EFAULT;
+
+    return vfs_unlink(path);
 }
 
 #define SEEK_SET 0
 #define SEEK_CUR 1
 #define SEEK_END 2
-#define EINVAL 22
 
 int64_t sys_lseek(uint64_t fd, uint64_t offset, uint64_t whence,
                   uint64_t arg4, uint64_t arg5, uint64_t arg6) {
     (void)arg4; (void)arg5; (void)arg6;
     
     task_t *current = get_current_task();
-    if (!current) return -1;
-    
-    if (fd >= MAX_FDS || !current->fd_table[fd]) {
-        return -1;
-    }
-    
+    if (!current) return -ESRCH;
+    if (fd >= MAX_FDS || !current->fd_table[fd]) return -EBADF;
+
     file_t *f = current->fd_table[fd];
+    if (f->inode && (f->inode->type == FT_FIFO || f->inode->type == FT_CHR)) return -ESPIPE;
     int64_t new_offset = f->offset;
     
     switch (whence) {
@@ -346,7 +313,7 @@ int64_t sys_lseek(uint64_t fd, uint64_t offset, uint64_t whence,
     }
     
     // Update the file descriptor's offset
-    f->offset = (uint32_t)new_offset;
+    f->offset = (uint64_t)new_offset;
     
     return new_offset;
 }
@@ -357,10 +324,10 @@ int64_t sys_dup2(uint64_t oldfd, uint64_t newfd, uint64_t arg3,
     (void)arg3; (void)arg4; (void)arg5; (void)arg6;
 
     task_t *current = get_current_task();
-    if (!current) return -1;
+    if (!current) return -ESRCH;
 
-    if (oldfd >= MAX_FDS || newfd >= MAX_FDS) return -1;
-    if (!current->fd_table[oldfd]) return -1;
+    if (oldfd >= MAX_FDS || newfd >= MAX_FDS) return -EBADF;
+    if (!current->fd_table[oldfd]) return -EBADF;
 
     if (oldfd == newfd) return (int64_t)newfd; // no-op, POSIX-correct
 
@@ -378,7 +345,7 @@ int64_t sys_dup2(uint64_t oldfd, uint64_t newfd, uint64_t arg3,
     return (int64_t)newfd;
 }
 
-// fcntl command numbers and errnos as defined by newlib (userland ABI)
+// fcntl command numbers as defined by newlib (userland ABI)
 #define FCNTL_F_DUPFD          0
 #define FCNTL_F_GETFD          1
 #define FCNTL_F_SETFD          2
@@ -386,23 +353,20 @@ int64_t sys_dup2(uint64_t oldfd, uint64_t newfd, uint64_t arg3,
 #define FCNTL_F_SETFL          4
 #define FCNTL_F_DUPFD_CLOEXEC  14
 #define FCNTL_FD_CLOEXEC       1
-#define FCNTL_EBADF            9
-#define FCNTL_EINVAL           22
-#define FCNTL_EMFILE           24
 
 int64_t sys_fcntl(uint64_t fd, uint64_t cmd, uint64_t arg,
                   uint64_t arg4, uint64_t arg5, uint64_t arg6) {
     (void)arg4; (void)arg5; (void)arg6;
 
     task_t *current = get_current_task();
-    if (!current) return -FCNTL_EBADF;
-    if (fd >= MAX_FDS || !current->fd_table[fd]) return -FCNTL_EBADF;
+    if (!current) return -EBADF;
+    if (fd >= MAX_FDS || !current->fd_table[fd]) return -EBADF;
 
     switch (cmd) {
     case FCNTL_F_DUPFD:
     case FCNTL_F_DUPFD_CLOEXEC: {
         // Lowest free descriptor >= arg
-        if (arg >= MAX_FDS) return -FCNTL_EINVAL;
+        if (arg >= MAX_FDS) return -EINVAL;
         for (uint64_t newfd = arg; newfd < MAX_FDS; newfd++) {
             if (current->fd_table[newfd]) continue;
             current->fd_table[newfd] = current->fd_table[fd];
@@ -413,7 +377,7 @@ int64_t sys_fcntl(uint64_t fd, uint64_t cmd, uint64_t arg,
                 current->fd_cloexec &= ~(1u << newfd);
             return (int64_t)newfd;
         }
-        return -FCNTL_EMFILE;
+        return -EMFILE;
     }
     case FCNTL_F_GETFD:
         return (current->fd_cloexec & (1u << fd)) ? FCNTL_FD_CLOEXEC : 0;
@@ -426,6 +390,6 @@ int64_t sys_fcntl(uint64_t fd, uint64_t cmd, uint64_t arg,
     case FCNTL_F_SETFL:
         return 0;  // O_NONBLOCK/O_APPEND not supported yet; accept silently
     default:
-        return -FCNTL_EINVAL;
+        return -EINVAL;
     }
 }

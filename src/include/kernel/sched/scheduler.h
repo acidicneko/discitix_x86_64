@@ -26,6 +26,7 @@ typedef struct task {
     int id;
     uint64_t wake_tick;
     uint8_t sleeping;      // 1 while in scheduler_sleep (only these wake on wake_tick)
+    void *wait_chan;       // what a BLOCKED task waits on, for sched_wakeup
     
     int parent_id;         // Parent task ID (0 if orphan/init)
     int exit_status;       // Exit status for waitpid
@@ -61,6 +62,7 @@ void schedule_tick(register_t *regs);
 task_t *get_current_task();
 void scheduler_sleep(uint64_t ticks);
 void task_reap(task_t *t);
+void sched_wakeup(void *chan);
 void reap_orphan_zombies(void);
 
 #endif

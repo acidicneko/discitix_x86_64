@@ -10,10 +10,15 @@
 #                   `make -C libc clean`)
 
 SYSROOT := $(CURDIR)/sysroot
+STRIP   := x86_64-linux-gnu-strip
 
 sysroot: apps ports
 	@mkdir -p $(SYSROOT)/bin $(SYSROOT)/usr $(SYSROOT)/boot $(SYSROOT)/etc
 	@cp -r source/apps/build/. $(SYSROOT)/bin
+	@# Strip the apps' ELF binaries (skips .gitkeep and friends)
+	@for f in $(SYSROOT)/bin/*; do \
+		case "$$(head -c 4 $$f)" in *ELF) $(STRIP) $$f ;; esac; \
+	done
 	@cp -r source/usr/. $(SYSROOT)/usr
 	@$(MAKE) --no-print-directory -C ../ports install DESTDIR=$(SYSROOT)
 	@cp source/color.txt $(SYSROOT)/boot/color.txt

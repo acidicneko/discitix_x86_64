@@ -21,6 +21,10 @@ void pit_handler(register_t *regs) {
   }
 }
 
+uint16_t pit_get_hz(void) {
+  return hz;
+}
+
 void set_frequency(uint16_t h) {
   hz = h;
   uint16_t divisor = 1193180 / h;

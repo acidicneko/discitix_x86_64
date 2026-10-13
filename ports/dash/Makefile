@@ -31,7 +31,8 @@ $(BUILD)/Makefile: $(SRC)/configure | $(LIBC) $(CRT0)
 		--disable-nls --without-libedit
 
 install: all
-	install -Dm755 $(BIN) $(DESTDIR)/bin/dash
+	@mkdir -p $(DESTDIR)/bin
+	$(INSTALL_PROGRAM) $(BIN) $(DESTDIR)/bin/dash
 
 clean:
 	rm -rf $(BUILD)

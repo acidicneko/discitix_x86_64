@@ -10,6 +10,7 @@
 #include <drivers/tty/tty.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
+#include <libk/errno.h>
 #include <stdint.h>
 
 extern void syscall_stub(void);
@@ -21,7 +22,7 @@ int64_t syscall_dispatch(register_t* regs) {
 
     if (syscall_num >= MAX_SYSCALLS || !syscall_handlers[syscall_num]) {
         dbgln("Unknown syscall: %d\n\r", (int)syscall_num);
-        return -1;
+        return -ENOSYS;
     }
 
     // Per task, so another task's syscall can't clobber it while this one
@@ -72,6 +73,9 @@ void init_syscalls(void) {
     syscall_register(SYS_DUP2, sys_dup2);
     syscall_register(SYS_GETPID, sys_getpid);
     syscall_register(SYS_FCNTL, sys_fcntl);
+    syscall_register(SYS_NANOSLEEP, sys_nanosleep);
+    syscall_register(SYS_CLOCK_GETTIME, sys_clock_gettime);
+    syscall_register(SYS_FTRUNCATE, sys_ftruncate);
     // Set up interrupt 0x80 for syscalls
     // Flags: 0xEE = Present(1) | DPL(11) | Type(01110) = interrupt gate accessible from Ring 3
     idt_set_gate(0x80, (uint64_t)syscall_stub, GDT_KERNEL_CODE, 0xEE);

@@ -18,9 +18,6 @@ typedef struct pipe {
     int      readers;
     int      writers;
     spinlock_t lock;
-
-    task_t  *blocked_reader;
-    task_t  *blocked_writer;
 } pipe_t;
 
 

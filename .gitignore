@@ -1,5 +1,6 @@
 .vscode/*
 *.o
+build/*
 build/image.hdd
 build/kernel.elf
 misc/initrd/initrd.img

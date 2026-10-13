@@ -162,6 +162,14 @@ int	lstat (const char *__restrict __path, struct stat *__restrict __buf );
 int	mknod (const char *__path, mode_t __mode, dev_t __dev );
 #endif
 
+/* Discitix: provided by libc's stubs.c */
+#ifndef UTIME_NOW
+#define UTIME_NOW	-2L
+#define UTIME_OMIT	-1L
+#endif
+int	lstat (const char *__restrict __path, struct stat *__restrict __buf );
+int	mknod (const char *__path, mode_t __mode, dev_t __dev );
+
 #if __ATFILE_VISIBLE
 int	fchmodat (int, const char *, mode_t, int);
 int	fstatat (int, const char *__restrict , struct stat *__restrict, int);

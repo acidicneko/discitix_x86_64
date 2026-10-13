@@ -1,0 +1,11 @@
+--- a/make/defaults.c
++++ b/make/defaults.c
+@@ -12,7 +12,7 @@
+ 	"LFLAGS =\n"
+ 	"YACC = yacc\n"
+ 	"YFLAGS =\n"
+-	"SHELL = /bin/sh\n"
++	"SHELL = /bin/dash\n"
+ 
+ 	".c:\n"
+ 	"\t${CC} ${CFLAGS} ${LDFLAGS} -o $@ $<\n"

@@ -25,7 +25,8 @@ $(BUILD):
 	mkdir -p $@
 
 install: all
-	install -Dm755 $(BIN) $(DESTDIR)/bin/lua
+	@mkdir -p $(DESTDIR)/bin
+	$(INSTALL_PROGRAM) $(BIN) $(DESTDIR)/bin/lua
 
 clean:
 	rm -rf $(BUILD)
