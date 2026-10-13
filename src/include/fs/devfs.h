@@ -5,6 +5,6 @@
 #include <stdint.h>
 
 int devfs_init(void);
-int devfs_register_device(const char *name, file_operations_t *fops, uint8_t type);
+int devfs_register_device(const char *name, file_operations_t *fops, uint8_t type, void *private);
 
 #endif // __DEVFS__

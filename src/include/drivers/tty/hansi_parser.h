@@ -5,7 +5,6 @@
 #define HTERM_ESC	    1
 #define HTERM_BRACKET	2
 #define HTERM_ARGS	    3
-#define HTERM_ENDARGS	4
 
 #include <stdbool.h>
 
@@ -17,9 +16,11 @@ typedef struct {
 typedef struct{
     int state;
 	int index;
+	bool private_mode;
 	ansi_args args[MAX_ARGS];
 } hansi_parser;
 
-void hansi_handler(char c);
+struct tty;
+void hansi_handler(struct tty *tty, char c);
 
 #endif

@@ -77,7 +77,7 @@ long devfs_getdents(inode_t *inode, uint64_t *offset, void *buf_ptr, uint32_t co
 }
 
 
-int devfs_register_device(const char *name, file_operations_t *fops, uint8_t type) {
+int devfs_register_device(const char *name, file_operations_t *fops, uint8_t type, void *private) {
     if (!name || !fops) return -1;
 
     inode_t *dev_inode = (inode_t *)kmalloc(sizeof(inode_t));
@@ -87,6 +87,7 @@ int devfs_register_device(const char *name, file_operations_t *fops, uint8_t typ
     dev_inode->is_directory = 0;
     dev_inode->f_ops = fops;
     dev_inode->i_ops = NULL; 
+    dev_inode->private = private;
     
     static uint32_t dev_ino_counter = 1000;
     dev_inode->ino = dev_ino_counter++;

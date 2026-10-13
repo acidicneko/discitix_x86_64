@@ -76,6 +76,7 @@ void init_syscalls(void) {
     syscall_register(SYS_NANOSLEEP, sys_nanosleep);
     syscall_register(SYS_CLOCK_GETTIME, sys_clock_gettime);
     syscall_register(SYS_FTRUNCATE, sys_ftruncate);
+    syscall_register(SYS_IOCTL, sys_ioctl);
     // Set up interrupt 0x80 for syscalls
     // Flags: 0xEE = Present(1) | DPL(11) | Type(01110) = interrupt gate accessible from Ring 3
     idt_set_gate(0x80, (uint64_t)syscall_stub, GDT_KERNEL_CODE, 0xEE);

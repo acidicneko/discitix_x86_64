@@ -44,6 +44,10 @@
 #define SYS_NANOSLEEP  24
 #define SYS_CLOCK_GETTIME 25
 #define SYS_FTRUNCATE  26
+#define SYS_IOCTL      27
+
+#define TCGETS 0x5401
+#define TCSETS 0x5402
 
 static inline long _syscall0(long num) {
     long ret;
@@ -348,9 +352,10 @@ char *getcwd(char *buf, size_t size) {
 // 7. COMPULSORY FALLBACK IMPLEMENTATIONS
 // ============================================================================
 int isatty(int file) {
-    if (file >= 0 && file <= 2) return 1;
-    errno = ENOTTY;
-    return 0;
+    unsigned int lflag;
+    long ret = _syscall3(SYS_IOCTL, (long)file, TCGETS, (long)&lflag);
+    if (ret < 0) { errno = ENOTTY; return 0; }
+    return 1;
 }
 
 
@@ -577,14 +582,9 @@ int ioctl(int fd, unsigned long request, ...) {
     void *arg = va_arg(ap, void*);
     va_end(ap);
 
-    if (request == TIOCGWINSZ) {
-        struct winsize *ws = (struct winsize*)arg;
-        ws->ws_row = 25; ws->ws_col = 80; // hardcode for now
-        ws->ws_xpixel = 0; ws->ws_ypixel = 0;
-        return 0;
-    }
-    errno = ENOSYS;
-    return -1;
+    long ret = _syscall3(SYS_IOCTL, (long)fd, (long)request, (long)arg);
+    if (ret < 0) { errno = (int)-ret; return -1; }
+    return (int)ret;
 }
 
 
@@ -663,13 +663,18 @@ int sigaction(int sig, const struct sigaction *act, struct sigaction *oldact) {
 
 // crt.c
 
+// The kernel only tracks ICANON and ECHO; everything else is reported as
+// the usual defaults.
 int tcgetattr(int fd, struct termios *t) {
-    (void)fd;
-    if (!t) return -1;
+    if (!t) { errno = EFAULT; return -1; }
+    unsigned int lflag;
+    long ret = _syscall3(SYS_IOCTL, (long)fd, TCGETS, (long)&lflag);
+    if (ret < 0) { errno = (int)-ret; return -1; }
+
     t->c_iflag = ICRNL | IXON;
     t->c_oflag = OPOST | ONLCR;
     t->c_cflag = CS8 | CREAD | CLOCAL;
-    t->c_lflag = ISIG | ICANON | ECHO | ECHOE | ECHOK;
+    t->c_lflag = ISIG | ECHOE | ECHOK | (lflag & (ICANON | ECHO));
     for (int i = 0; i < NCCS; i++) t->c_cc[i] = 0;
     t->c_cc[VINTR] = 3;
     t->c_cc[VQUIT] = 28;
@@ -682,7 +687,11 @@ int tcgetattr(int fd, struct termios *t) {
 }
 
 int tcsetattr(int fd, int action, const struct termios *t) {
-    (void)fd; (void)action; (void)t;
+    (void)action;
+    if (!t) { errno = EFAULT; return -1; }
+    unsigned int lflag = t->c_lflag & (ICANON | ECHO);
+    long ret = _syscall3(SYS_IOCTL, (long)fd, TCSETS, (long)&lflag);
+    if (ret < 0) { errno = (int)-ret; return -1; }
     return 0;
 }
 

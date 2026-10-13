@@ -1,11 +1,43 @@
 #include <drivers/tty/tty.h>
 #include <drivers/tty/psf2.h>
 #include <drivers/framebuffer.h>
+#include <libk/errno.h>
 #include <stddef.h>
 #include <stdint.h>
 
+#define TCGETS      0x5401
+#define TCSETS      0x5402
+#define TIOCGWINSZ  0x5413
+#define LFLAG_ICANON 0000002   // same bits as userland's <termios.h>
+#define LFLAG_ECHO   0000010
+
+struct winsize {
+  uint16_t ws_row, ws_col, ws_xpixel, ws_ypixel;
+};
+
 void tty_set_ldisc(tty_t* tty, int mode) {
   tty->ldisc_mode = mode;
+}
+
+static void echo(tty_t *tty, char c) {
+  if (tty->echo) tty_write_chars(tty, &c, 1);
+}
+
+static void echo_seq(tty_t *tty, const char *s) {
+  while (*s) echo(tty, *s++);
+}
+
+// Hand the edited line to readers (Enter, or Ctrl-D on a non-empty line)
+static void flush_line(tty_t *tty) {
+  for (size_t i = 0; i < tty->line_length; i++) {
+    size_t next_head = (tty->input_head + 1) % TTY_MAX_BUF;
+    if (next_head == tty->input_tail) break;
+    tty->input_buf[tty->input_head] = tty->line_buffer[i];
+    tty->input_head = next_head;
+  }
+  tty->line_length = 0;
+  tty->line_cursor = 0;
+  tty->line_ready = true;
 }
 
 // Handle a character input from keyboard to a specific TTY
@@ -17,10 +49,7 @@ void tty_input_char(tty_t* tty, char c) {
       tty->input_buf[tty->input_head] = c;
       tty->input_head = next_head;
     }
-    // Don't echo in raw mode for escape sequences
-    if (tty->echo && tty->id == current_tty->id && c >= 32 && c < 127) {
-      tty_putchar(c);
-    }
+    if (c >= 32 && c < 127) echo(tty, c);
   } else {
     // Canonical mode: line editing with escape sequence handling
     
@@ -46,41 +75,25 @@ void tty_input_char(tty_t* tty, char c) {
         case 'C': // Right arrow - move cursor right
           if (tty->line_cursor < tty->line_length) {
             tty->line_cursor++;
-            if (tty->echo && tty->id == current_tty->id) {
-              tty_putchar('\033');
-              tty_putchar('[');
-              tty_putchar('C');
-            }
+            echo_seq(tty, "\033[C");
           }
           return;
         case 'D': // Left arrow - move cursor left
           if (tty->line_cursor > 0) {
             tty->line_cursor--;
-            if (tty->echo && tty->id == current_tty->id) {
-              tty_putchar('\033');
-              tty_putchar('[');
-              tty_putchar('D');
-            }
+            echo_seq(tty, "\033[D");
           }
           return;
         case 'H': // Home - move to beginning
           while (tty->line_cursor > 0) {
             tty->line_cursor--;
-            if (tty->echo && tty->id == current_tty->id) {
-              tty_putchar('\033');
-              tty_putchar('[');
-              tty_putchar('D');
-            }
+            echo_seq(tty, "\033[D");
           }
           return;
         case 'F': // End - move to end
           while (tty->line_cursor < tty->line_length) {
             tty->line_cursor++;
-            if (tty->echo && tty->id == current_tty->id) {
-              tty_putchar('\033');
-              tty_putchar('[');
-              tty_putchar('C');
-            }
+            echo_seq(tty, "\033[C");
           }
           return;
         case '3': // Could be Delete (ESC[3~)
@@ -98,24 +111,16 @@ void tty_input_char(tty_t* tty, char c) {
     }
     
     if (c == '\n' || c == '\r') {
-      // End of line - copy line buffer to input buffer
-      if (tty->line_length < TTY_MAX_BUF - 1) {
-        tty->line_buffer[tty->line_length++] = '\n';
-      }
-      // Copy line to input ring buffer
-      for (size_t i = 0; i < tty->line_length; i++) {
-        size_t next_head = (tty->input_head + 1) % TTY_MAX_BUF;
-        if (next_head != tty->input_tail) {
-          tty->input_buf[tty->input_head] = tty->line_buffer[i];
-          tty->input_head = next_head;
-        }
-      }
-      tty->line_length = 0;
-      tty->line_cursor = 0;
-      tty->line_ready = true;
-      // Echo newline
-      if (tty->echo && tty->id == current_tty->id) {
-        tty_putchar('\n');
+      tty->line_buffer[tty->line_length++] = '\n';
+      flush_line(tty);
+      echo(tty, '\n');
+    } else if (c == 0x04) {
+      // Ctrl+D: EOF on an empty line, otherwise pass the line on as-is
+      if (tty->line_length == 0) {
+        tty->eof_pending = true;
+        tty->line_ready = true;
+      } else {
+        flush_line(tty);
       }
     } else if (c == '\b' || c == 127) {
       // Backspace - delete character before cursor
@@ -126,36 +131,30 @@ void tty_input_char(tty_t* tty, char c) {
         }
         tty->line_length--;
         tty->line_cursor--;
-        // Echo: move back, redraw rest of line, clear last char, move cursor back
-        if (tty->echo && tty->id == current_tty->id) {
-          tty_putchar('\b');
-          for (size_t i = tty->line_cursor; i < tty->line_length; i++) {
-            tty_putchar(tty->line_buffer[i]);
-          }
-          tty_putchar(' ');  // Clear last character
-          // Move cursor back to position
-          for (size_t i = tty->line_cursor; i <= tty->line_length; i++) {
-            tty_putchar('\b');
-          }
+        // Move back, redraw the rest of the line, blank the old last char,
+        // then move back to the cursor
+        echo(tty, '\b');
+        for (size_t i = tty->line_cursor; i < tty->line_length; i++) {
+          echo(tty, tty->line_buffer[i]);
+        }
+        echo(tty, ' ');
+        for (size_t i = tty->line_cursor; i <= tty->line_length; i++) {
+          echo(tty, '\b');
         }
       }
     } else if (c == 0x03) {
       // Ctrl+C - clear line buffer (simple handling)
       tty->line_length = 0;
       tty->line_cursor = 0;
-      if (tty->echo && tty->id == current_tty->id) {
-        tty_putchar('^');
-        tty_putchar('C');
-        tty_putchar('\n');
-      }
+      echo_seq(tty, "^C\n");
     } else if (c == 0x0C) {
       // Ctrl+L - clear screen
-      if (tty->id == current_tty->id) {
+      if (tty == current_tty) {
         tty_clear();
       }
     } else if (c >= 32 && c < 127) {
       // Printable character - insert at cursor position
-      if (tty->line_length < TTY_MAX_BUF - 1) {
+      if (tty->line_length < TTY_MAX_BUF - 2) {
         // Shift characters right to make room
         for (size_t i = tty->line_length; i > tty->line_cursor; i--) {
           tty->line_buffer[i] = tty->line_buffer[i - 1];
@@ -163,16 +162,11 @@ void tty_input_char(tty_t* tty, char c) {
         tty->line_buffer[tty->line_cursor] = c;
         tty->line_length++;
         tty->line_cursor++;
-        // Echo
-        if (tty->echo && tty->id == current_tty->id) {
-          // Print from cursor position to end
-          for (size_t i = tty->line_cursor - 1; i < tty->line_length; i++) {
-            tty_putchar(tty->line_buffer[i]);
-          }
-          // Move cursor back to correct position
-          for (size_t i = tty->line_cursor; i < tty->line_length; i++) {
-            tty_putchar('\b');
-          }
+        for (size_t i = tty->line_cursor - 1; i < tty->line_length; i++) {
+          echo(tty, tty->line_buffer[i]);
+        }
+        for (size_t i = tty->line_cursor; i < tty->line_length; i++) {
+          echo(tty, '\b');
         }
       }
     }
@@ -182,46 +176,77 @@ void tty_input_char(tty_t* tty, char c) {
 // Read from TTY - implements line discipline
 long tty_read(file_t* file, void* buf, size_t len, uint64_t off) {
   (void)off;
-  if (!buf || len == 0) {
-    return -1;
-  }
-  
-  tty_t* tty = &ttys[file->inode->ino - 1000];
+  if (!buf) return -EFAULT;
+  if (len == 0) return 0;
+
+  tty_t* tty = (tty_t *)file->inode->private;
+  if (!tty) return -ENXIO;
   char* dest = (char*)buf;
   size_t bytes_read = 0;
-  
+
   if (tty->ldisc_mode == TTY_CANONICAL) {
-    // Canonical mode: wait for a complete line
     while (!tty->line_ready) {
-      // Wait for input (allow interrupts)
       asm volatile("sti; hlt; cli");
     }
-    
-    // Read from input buffer until newline or len reached
+
+    if (tty->input_tail == tty->input_head && tty->eof_pending) {
+      tty->eof_pending = false;
+      tty->line_ready = false;
+      return 0;
+    }
+
     while (bytes_read < len && tty->input_tail != tty->input_head) {
       char c = tty->input_buf[tty->input_tail];
       tty->input_tail = (tty->input_tail + 1) % TTY_MAX_BUF;
       dest[bytes_read++] = c;
-      if (c == '\n') {
-        break;  // Return at end of line in canonical mode
-      }
+      if (c == '\n') break;
     }
-    
-    // Check if more data available, if not reset line_ready
-    if (tty->input_tail == tty->input_head) {
+
+    if (tty->input_tail == tty->input_head && !tty->eof_pending) {
       tty->line_ready = false;
     }
   } else {
-    // Raw mode: return whatever is available, or wait for at least one char
     while (tty->input_tail == tty->input_head) {
       asm volatile("sti; hlt; cli");
     }
-    
+
     while (bytes_read < len && tty->input_tail != tty->input_head) {
       dest[bytes_read++] = tty->input_buf[tty->input_tail];
       tty->input_tail = (tty->input_tail + 1) % TTY_MAX_BUF;
     }
   }
-  
+
   return (long)bytes_read;
+}
+
+int tty_ioctl(file_t* file, uint64_t request, void* arg) {
+  tty_t *tty = (tty_t *)file->inode->private;
+  if (!tty) return -ENOTTY;
+  if (!arg) return -EFAULT;
+
+  switch (request) {
+  case TIOCGWINSZ: {
+    struct winsize *ws = (struct winsize *)arg;
+    ws->ws_row = tty->height;
+    ws->ws_col = tty->width;
+    ws->ws_xpixel = current_fb ? current_fb->width : 0;
+    ws->ws_ypixel = current_fb ? current_fb->height : 0;
+    return 0;
+  }
+  case TCGETS:
+    *(uint32_t *)arg = (tty->ldisc_mode == TTY_CANONICAL ? LFLAG_ICANON : 0) |
+                       (tty->echo ? LFLAG_ECHO : 0);
+    return 0;
+  case TCSETS: {
+    uint32_t lflag = *(uint32_t *)arg;
+    int mode = (lflag & LFLAG_ICANON) ? TTY_CANONICAL : TTY_RAW;
+    if (mode == TTY_RAW && tty->ldisc_mode == TTY_CANONICAL && tty->line_length)
+      flush_line(tty);
+    tty_set_ldisc(tty, mode);
+    tty->echo = (lflag & LFLAG_ECHO) != 0;
+    return 0;
+  }
+  default:
+    return -EINVAL;
+  }
 }

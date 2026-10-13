@@ -27,14 +27,15 @@ bool tty_initialized;
 fb_info_t *current_fb;
 tty_t ttys[4];
 
-inode_t* tty_node = NULL;
 static file_operations_t tty_file_ops = {
   .read = tty_read,
   .write = tty_write,
   .open = NULL,
-  .close = NULL
+  .close = NULL,
+  .ioctl = tty_ioctl
 };
 
+static bool cursor_visible = true;
 
 void init_tty() {
   init_framebuffer();
@@ -42,15 +43,13 @@ void init_tty() {
   y_cursor = 0;
   current_fb = get_fb_info();
   load_embedded_psf2();
-  
-  
+
   for (int i = 0; i < TTY_NUM; ++i) {
     char name[16] = "tty";
     char id_str[8];
     itoa(i, id_str, 10);
     strcat(name, id_str);
     log("TTY", INFO, "Registering /dev/%s\n\r", name);
-    devfs_register_device(name, &tty_file_ops, FT_CHR);  
     ttys[i] = (tty_t) {
       .x_cursor = 0,
       .y_cursor = 0,
@@ -58,22 +57,20 @@ void init_tty() {
       .height = current_fb->height/g_font.header->height,
       .width = current_fb->width/g_font.header->width,
       .id = i,
+      .fg = colors[7],
+      .bg = colors[0],
+      .parser = { .state = HTERM_ESC },
       .tty_ops = tty_file_ops,
       .ldisc_mode = TTY_CANONICAL,
       .echo = true,
-      .input_head = 0,
-      .input_tail = 0,
-      .line_length = 0,
-      .line_cursor = 0,
-      .line_ready = false,
       .input_esc_state = INPUT_STATE_NORMAL,
     };
     ttys[i].buffer = (terminal_cell_t*)kmalloc(sizeof(terminal_cell_t)*ttys[i].width*ttys[i].height);
     memset(ttys[i].buffer, 0, sizeof(terminal_cell_t)*ttys[i].height*ttys[i].width);
+    devfs_register_device(name, &tty_file_ops, FT_CHR, &ttys[i]);
   }
-  current_tty = &ttys[0]; 
+  current_tty = &ttys[0];
   tty_initialized = true;
-  // tty_paint_cursor(x_cursor, y_cursor);
 }
 
 void init_colors(uint32_t black, uint32_t red, uint32_t green, uint32_t yellow,
@@ -105,122 +102,104 @@ void init_colors(uint32_t black, uint32_t red, uint32_t green, uint32_t yellow,
 
   currentBg = colors[0];
   currentFg = colors[7];
+  for (int i = 0; i < TTY_NUM; i++) {
+    ttys[i].fg = currentFg;
+    ttys[i].bg = currentBg;
+  }
 
   framebuffer_clear(currentBg);
 }
 
-void tty_paint_cell(terminal_cell_t cell) {
-  uint8_t iy, ix;
-  // paint the background of cell
-  for (iy = 0; iy < 8; iy++) {
-    for (ix = 0; ix < 8; ix++) {
-      if ((font[128][iy] >> ix) & 1) {
-        framebuffer_put_pixel(ix + x_cursor * GLYPH_WIDTH,
-                              iy + y_cursor * GLYPH_HEIGHT, cell.bg);
-      }
-    }
-  }
-  // paint the printable character
-  for (iy = 0; iy < 8; iy++) {
-    for (ix = 0; ix < 8; ix++) {
-      if ((font[(uint8_t)cell.printable_char][iy] >> ix) & 1) {
-        framebuffer_put_pixel(ix + x_cursor * GLYPH_WIDTH,
-                              iy + y_cursor * GLYPH_HEIGHT, cell.fg);
-      }
+static void paint_bitmap_cell(terminal_cell_t cell, uint32_t x, uint32_t y) {
+  for (uint8_t iy = 0; iy < 8; iy++) {
+    for (uint8_t ix = 0; ix < 8; ix++) {
+      bool on = (font[(uint8_t)cell.printable_char & 0x7F][iy] >> ix) & 1;
+      framebuffer_put_pixel(ix + x * GLYPH_WIDTH, iy + y * GLYPH_HEIGHT, on ? cell.fg : cell.bg);
     }
   }
 }
 
-void tty_paint_cell_psf(terminal_cell_t cell, tty_t* tty) {
-  if (g_font.header == 0) {
-    log("TTY", ERROR,"Invalid psf font detected! Falling back to bitmap font!\n\r");
-    tty_paint_cell(cell);
+static void paint_cell(terminal_cell_t cell, uint32_t x, uint32_t y) {
+  if (!g_font.header || !g_font.glyphBuffer) {
+    paint_bitmap_cell(cell, x, y);
     return;
   }
 
-  if (g_font.glyphBuffer == 0) {
-    log("TTY", ERROR,
-        "Invalid font memory detected! Falling back to bitmap font!\n\r");
-    tty_paint_cell(cell);
-    return;
-  }
+  uint32_t index = (uint8_t)cell.printable_char;
+  if (index >= g_font.header->length) index = '?';
+  uint8_t *glyph = g_font.glyphBuffer + index * g_font.header->bytesperglyph;
 
-  uint8_t *glyph =
-      g_font.glyphBuffer + (cell.printable_char * g_font.header->bytesperglyph);
+  uint32_t w = g_font.header->width, h = g_font.header->height;
+  uint32_t stride = (w + 7) / 8;
+  uint32_t start_x = x * w, start_y = y * h;
 
-  if (glyph == 0) {
-    dbgln("TTY",ERROR,"Invalid symbol Falling back to bitmap font!\n\r");
-    tty_paint_cell(cell);
-    return;
-  }
-
-  int start_x = tty->x_cursor * g_font.header->width;
-  int start_y = tty->y_cursor * g_font.header->height;
-
-  for (uint32_t row = 0; row < g_font.header->height; ++row) {
-    for (uint32_t col = 0; col < g_font.header->width; ++col) {
-      uint8_t byte = glyph[row * ((g_font.header->width + 7) / 8) + (col / 8)];
-      uint8_t bit = (byte >> (7 - (col % 8))) & 1;
-
-      // Use the cell's fg/bg colors instead of global colors
-      uint32_t color = bit ? cell.fg : cell.bg;
-      framebuffer_put_pixel(start_x + col, start_y + row, color);
+  for (uint32_t row = 0; row < h; ++row) {
+    for (uint32_t col = 0; col < w; ++col) {
+      uint8_t bit = (glyph[row * stride + col / 8] >> (7 - (col % 8))) & 1;
+      framebuffer_put_pixel(start_x + col, start_y + row, bit ? cell.fg : cell.bg);
     }
   }
 }
 
-void tty_hide_cursor() {
-  if (!current_tty) return;
-  
-  // Get the actual character at cursor position from buffer, or space if empty
-  int idx = current_tty->y_cursor * current_tty->width + current_tty->x_cursor;
-  terminal_cell_t cell;
-  
-  if (current_tty->buffer[idx].printable_char != 0) {
-    cell = current_tty->buffer[idx];
-  } else {
-    cell = (terminal_cell_t){.printable_char = ' ', .fg = currentFg, .bg = currentBg};
-  }
-  
-  tty_paint_cell_psf(cell, current_tty); // Restore the actual character
+static terminal_cell_t cell_at(tty_t *tty, uint16_t x, uint16_t y) {
+  terminal_cell_t c = tty->buffer[y * tty->width + x];
+  if (c.printable_char == 0)
+    c = (terminal_cell_t){ .printable_char = ' ', .fg = tty->colors[7], .bg = tty->colors[0] };
+  return c;
 }
 
-void tty_putchar_raw(char c) {
-  tty_t* tty = current_tty;
-  if (!tty) return;
-  
-  terminal_cell_t* buffer = tty->buffer;
-  
-  tty_hide_cursor(); // Hide the cursor before printing
+static void redraw_cell(tty_t *tty, uint16_t x, uint16_t y) {
+  if (tty != current_tty) return;
+  paint_cell(cell_at(tty, x, y), x, y);
+}
+
+static void hide_cursor(tty_t *tty) {
+  redraw_cell(tty, tty->x_cursor, tty->y_cursor);
+}
+
+static void show_cursor(tty_t *tty) {
+  if (tty != current_tty) return;
+  terminal_cell_t c = cell_at(tty, tty->x_cursor, tty->y_cursor);
+  c.printable_char = '_';
+  paint_cell(c, tty->x_cursor, tty->y_cursor);
+  cursor_visible = true;
+}
+
+static void scroll(tty_t *tty) {
+  size_t row = tty->width;
+  memmove(tty->buffer, tty->buffer + row, sizeof(terminal_cell_t) * row * (tty->height - 1));
+  terminal_cell_t blank = { .printable_char = ' ', .fg = tty->fg, .bg = tty->bg };
+  for (size_t col = 0; col < row; ++col)
+    tty->buffer[(tty->height - 1) * row + col] = blank;
+
+  if (tty == current_tty)
+    scroll_framebuffer(tty->bg, g_font.header ? g_font.header->height : GLYPH_HEIGHT);
+}
+
+void tty_erase(tty_t *tty, size_t from, size_t to) {
+  size_t cells = (size_t)tty->width * tty->height;
+  if (to > cells) to = cells;
+  terminal_cell_t blank = { .printable_char = ' ', .fg = tty->fg, .bg = tty->bg };
+  for (size_t i = from; i < to; i++) {
+    tty->buffer[i] = blank;
+    redraw_cell(tty, i % tty->width, i / tty->width);
+  }
+}
+
+// One character, no escape-sequence processing and no cursor painting
+void tty_put_raw(tty_t *tty, char c) {
   switch (c) {
-  case '\n': {
-    // Clear rest of line in buffer
-    terminal_cell_t blank = {.printable_char = ' ', .fg = currentFg, .bg = currentBg};
-    for (uint16_t x = tty->x_cursor; x < tty->width; x++) {
-      buffer[tty->y_cursor * tty->width + x] = blank;
-    }
+  case '\n':
     tty->x_cursor = 0;
     tty->y_cursor++;
     break;
-  }
-
   case '\r':
     tty->x_cursor = 0;
     break;
-
-  case '\t': {
-    // Clear cells for tab
-    terminal_cell_t blank = {.printable_char = ' ', .fg = currentFg, .bg = currentBg};
-    uint16_t target_x = (tty->x_cursor - (tty->x_cursor % 8)) + 8;
-    if (target_x > tty->width) target_x = tty->width;
-    while (tty->x_cursor < target_x) {
-      buffer[tty->y_cursor * tty->width + tty->x_cursor] = blank;
-      tty_paint_cell_psf(blank, tty);
-      tty->x_cursor++;
-    }
+  case '\t':
+    tty->x_cursor = (tty->x_cursor + 8) & ~7;
+    if (tty->x_cursor >= tty->width) tty->x_cursor = tty->width - 1;
     break;
-  }
-
   case '\b':
     if (tty->x_cursor > 0) {
       tty->x_cursor--;
@@ -228,102 +207,72 @@ void tty_putchar_raw(char c) {
       tty->y_cursor--;
       tty->x_cursor = tty->width - 1;
     }
-
-    {
-      terminal_cell_t blank = {
-          .printable_char = ' ', .fg = currentFg, .bg = currentBg};
-      // Clear the buffer entry too
-      int idx = tty->y_cursor * tty->width + tty->x_cursor;
-      buffer[idx] = blank;
-      tty_paint_cell_psf(blank, tty); // Draw blank at new cursor
-    }
     break;
-
-  default:
-    {
-      terminal_cell_t cell = {
-          .printable_char = c, .fg = currentFg, .bg = currentBg};
-      // Store in buffer so it can be restored when cursor moves
-      int idx = tty->y_cursor * tty->width + tty->x_cursor;
-      buffer[idx] = cell;
-      tty_paint_cell_psf(cell, tty);
-      tty->x_cursor++;
-    }
+  default: {
+    if ((uint8_t)c < 32 || c == 127) break;
+    terminal_cell_t cell = { .printable_char = c, .fg = tty->fg, .bg = tty->bg };
+    tty->buffer[tty->y_cursor * tty->width + tty->x_cursor] = cell;
+    redraw_cell(tty, tty->x_cursor, tty->y_cursor);
+    tty->x_cursor++;
     break;
   }
+  }
+
   if (tty->x_cursor >= tty->width) {
     tty->x_cursor = 0;
     tty->y_cursor++;
   }
   if (tty->y_cursor >= tty->height) {
-    // Scroll buffer: shift all rows up by one
-    for (int row = 1; row < tty->height; ++row) {
-      for (int col = 0; col < tty->width; ++col) {
-        buffer[(row - 1) * tty->width + col] = buffer[row * tty->width + col];
-      }
-    }
-    // Clear the last row
-    terminal_cell_t blank = {.printable_char = ' ', .fg = currentFg, .bg = currentBg};
-    for (int col = 0; col < tty->width; ++col) {
-      buffer[(tty->height - 1) * tty->width + col] = blank;
-    }
-    
-    scroll_framebuffer(currentBg, g_font.header->height);
-    tty->x_cursor = 0;
+    scroll(tty);
     tty->y_cursor = tty->height - 1;
   }
-  tty_paint_cursor(tty->x_cursor, tty->y_cursor);
 }
 
-void tty_putchar(char c) { hansi_handler(c); }
+void tty_write_chars(tty_t *tty, const char *s, size_t len) {
+  if (!tty || !tty->buffer) return;
+  uint64_t flags;
+  asm volatile("pushfq; pop %0; cli" : "=r"(flags) :: "memory");
 
-// Paint cursor at current TTY's cursor position
-void tty_paint_cursor(uint32_t x, uint32_t y) {
-  if (!current_tty) return;
-  // Temporarily set cursor position for painting
-  uint16_t saved_x = current_tty->x_cursor;
-  uint16_t saved_y = current_tty->y_cursor;
-  current_tty->x_cursor = x;
-  current_tty->y_cursor = y;
-  
-  terminal_cell_t cell = {
-      .printable_char = '_', .fg = currentFg, .bg = currentBg};
-  tty_paint_cell_psf(cell, current_tty);
-  
-  current_tty->x_cursor = saved_x;
-  current_tty->y_cursor = saved_y;
+  hide_cursor(tty);
+  for (size_t i = 0; i < len; i++)
+    hansi_handler(tty, s[i]);
+  show_cursor(tty);
+
+  asm volatile("push %0; popfq" :: "r"(flags) : "memory", "cc");
+}
+
+void tty_repaint(tty_t *tty) {
+  if (tty != current_tty) return;
+  framebuffer_clear(tty->colors[0]);
+  for (uint16_t y = 0; y < tty->height; y++)
+    for (uint16_t x = 0; x < tty->width; x++)
+      redraw_cell(tty, x, y);
+  show_cursor(tty);
+}
+
+void tty_putchar(char c) {
+  tty_write_chars(current_tty, &c, 1);
 }
 
 void tty_toggle_cursor_visibility() {
-  if (!current_tty) return;
-  static int cursor_visible = 1;
+  tty_t *tty = current_tty;
+  if (!tty || !tty->buffer) return;
   if (cursor_visible) {
-    tty_paint_cursor(current_tty->x_cursor, current_tty->y_cursor);
+    hide_cursor(tty);
+    cursor_visible = false;
   } else {
-    // Restore the actual character from buffer instead of painting space
-    int idx = current_tty->y_cursor * current_tty->width + current_tty->x_cursor;
-    terminal_cell_t cell;
-    if (current_tty->buffer[idx].printable_char != 0) {
-      cell = current_tty->buffer[idx];
-    } else {
-      cell = (terminal_cell_t){.printable_char = ' ', .fg = currentFg, .bg = currentBg};
-    }
-    tty_paint_cell_psf(cell, current_tty);
+    show_cursor(tty);
   }
-  cursor_visible = !cursor_visible;
 }
 
-void set_currentFg(uint32_t value) { currentFg = value; }
-
-void set_currentBg(uint32_t value) { currentBg = value; }
-
 void tty_clear() {
-  if (current_tty) {
-    current_tty->x_cursor = 0;
-    current_tty->y_cursor = 0;
-    memset(current_tty->buffer, 0, sizeof(terminal_cell_t) * current_tty->width * current_tty->height);
+  tty_t *tty = current_tty;
+  if (tty) {
+    tty->x_cursor = 0;
+    tty->y_cursor = 0;
+    memset(tty->buffer, 0, sizeof(terminal_cell_t) * tty->width * tty->height);
   }
-  framebuffer_clear(currentBg);
+  framebuffer_clear(tty ? tty->bg : currentBg);
 }
 
 tty_t* get_current_tty(){

@@ -45,7 +45,7 @@ void keyboard_handler(register_t* regs){
 
 /*translate a scancode to an ascii character*/
 char translate(uint8_t scancode){
-  if(scancode > 58)
+  if(scancode >= 58)
     return 0;
 
   if(isShift == 1)

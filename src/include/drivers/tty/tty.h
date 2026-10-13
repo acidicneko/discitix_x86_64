@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <libk/spinlock.h>
 #include <drivers/framebuffer.h>
+#include <drivers/tty/hansi_parser.h>
 
 #define TTY_MAX_BUF 256
 
@@ -27,7 +28,7 @@ typedef struct {
 #define INPUT_STATE_ESC     1
 #define INPUT_STATE_CSI     2
 
-typedef struct {
+typedef struct tty {
   uint8_t id;
 
   terminal_cell_t *buffer;
@@ -37,6 +38,12 @@ typedef struct {
 
   uint16_t x_cursor;
   uint16_t y_cursor;
+
+  // Output attributes and escape-sequence state, per TTY
+  uint32_t fg;
+  uint32_t bg;
+  bool bold;
+  hansi_parser parser;
 
   // Line discipline modes
   int ldisc_mode;           // TTY_CANONICAL or TTY_RAW
@@ -52,6 +59,7 @@ typedef struct {
   size_t line_length;
   size_t line_cursor;           // Cursor position within line buffer for editing
   volatile bool line_ready;     // Set when Enter is pressed in canonical mode
+  volatile bool eof_pending;    // Ctrl-D on an empty line: next read returns 0
   
   // Input escape sequence parser state
   int input_esc_state;
@@ -86,15 +94,14 @@ void init_colors(uint32_t black, uint32_t red, uint32_t green, uint32_t yellow,
                  uint32_t purpleBright, uint32_t cyanBright,
                  uint32_t whiteBright);
 
-void tty_paint_cell(terminal_cell_t cell);
-void tty_paint_cell_psf(terminal_cell_t cell, tty_t* tty);
-void tty_putchar_raw(char c);
 void tty_putchar(char c);
-void tty_paint_cursor(uint32_t x, uint32_t y);
+void tty_write_chars(tty_t *tty, const char *s, size_t len);
 void tty_toggle_cursor_visibility();
+void tty_repaint(tty_t *tty);
 
-void set_currentFg(uint32_t value);
-void set_currentBg(uint32_t value);
+// Used by the ANSI parser
+void tty_put_raw(tty_t *tty, char c);
+void tty_erase(tty_t *tty, size_t from, size_t to);
 
 void tty_clear();
 
@@ -107,5 +114,6 @@ void tty_set_ldisc(tty_t* tty, int mode);
 
 long tty_read(file_t* file, void* buf, size_t len, uint64_t off);
 long tty_write(file_t* file, const void* data, size_t len, uint64_t off);
+int tty_ioctl(file_t* file, uint64_t request, void* arg);
 
 #endif

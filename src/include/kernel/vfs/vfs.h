@@ -89,6 +89,7 @@ struct file_operations {
     long (*read)(file_t*, void*, size_t, uint64_t);
     long (*write)(file_t*, const void*, size_t, uint64_t);
     int (*truncate)(inode_t*, uint64_t);
+    int (*ioctl)(file_t*, uint64_t, void*);
 };
 
 typedef struct {

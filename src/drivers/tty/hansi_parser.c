@@ -6,178 +6,144 @@ But instead of a terminal, it is a ANSI Parser only.
 */
 #include <drivers/tty/hansi_parser.h>
 #include <drivers/tty/tty.h>
-#include <drivers/tty/psf2.h>
-#include <drivers/framebuffer.h>
 
-hansi_parser g_parser = {
-    .state = HTERM_ESC,
-    .index = 0
-}; // global parser object
-
-bool isdigit(char c){
-    if(c >= '0' && c <= '9'){
-        return true;
-    }
-    return false;
+static int arg(hansi_parser *p, int i, int def) {
+    if (i >= p->index || p->args[i].empty) return def;
+    return p->args[i].value;
 }
 
-void hansi_handle_sgr(ansi_args* stack, int count){
-    static bool fg_bold = false;
-    static bool bg_bold = false;
-    for (int i = 0; i < count; i++)
-    {
-        if (stack[i].empty || stack[i].value == 0)
-        {
-            set_currentFg(colors[7]);
-            set_currentBg(colors[0]);
-            fg_bold = false;
-            bg_bold = false;
-        }
-        else
-        {
-            int attr = stack[i].value;
-            int value;
-            if (attr == 1)
-            {
-                fg_bold = true;
-            }
-            else if (attr == 21)
-            {
-                bg_bold = true;
-            }
-            else if (attr >= 30 && attr <= 37)
-            {
-                if(fg_bold)    value = (attr - 30) + 8;
-                else value = attr - 30;
-                set_currentFg(colors[value]);
-            }
-            else if (attr >= 40 && attr <= 47)
-            {
-                if(bg_bold)    value = (attr - 40) + 8;
-                else value = attr - 40;
-                set_currentBg(colors[value]);
-            }
+static void handle_sgr(tty_t *tty, hansi_parser *p) {
+    for (int i = 0; i < p->index; i++) {
+        int attr = p->args[i].empty ? 0 : p->args[i].value;
+
+        if (attr == 0) {
+            tty->fg = tty->colors[7];
+            tty->bg = tty->colors[0];
+            tty->bold = false;
+        } else if (attr == 1) {
+            tty->bold = true;
+        } else if (attr == 22) {
+            tty->bold = false;
+        } else if (attr >= 30 && attr <= 37) {
+            tty->fg = tty->colors[(attr - 30) + (tty->bold ? 8 : 0)];
+        } else if (attr == 39) {
+            tty->fg = tty->colors[7];
+        } else if (attr >= 40 && attr <= 47) {
+            tty->bg = tty->colors[attr - 40];
+        } else if (attr == 49) {
+            tty->bg = tty->colors[0];
+        } else if (attr >= 90 && attr <= 97) {
+            tty->fg = tty->colors[(attr - 90) + 8];
+        } else if (attr >= 100 && attr <= 107) {
+            tty->bg = tty->colors[(attr - 100) + 8];
         }
     }
 }
 
-void hansi_handler(char c){
-    if(g_parser.state == HTERM_ESC){
-        if(c == '\033'){
-            g_parser.state = HTERM_BRACKET;
-            g_parser.index = 0;
-            g_parser.args[g_parser.index].value = 0;
-            g_parser.args[g_parser.index].empty = true;
-        }
-        else{
-            g_parser.state = HTERM_ESC;
-            tty_putchar_raw(c);
-        }
+static void handle_csi(tty_t *tty, hansi_parser *p, char c) {
+    int w = tty->width, h = tty->height;
+    size_t pos = (size_t)tty->y_cursor * w + tty->x_cursor;
+    int n;
+
+    switch (c) {
+    case 'm':
+        handle_sgr(tty, p);
+        break;
+    case 'A':
+        n = arg(p, 0, 1);
+        tty->y_cursor = (tty->y_cursor > n) ? tty->y_cursor - n : 0;
+        break;
+    case 'B':
+        n = arg(p, 0, 1);
+        tty->y_cursor = (tty->y_cursor + n < h) ? tty->y_cursor + n : h - 1;
+        break;
+    case 'C':
+        n = arg(p, 0, 1);
+        tty->x_cursor = (tty->x_cursor + n < w) ? tty->x_cursor + n : w - 1;
+        break;
+    case 'D':
+        n = arg(p, 0, 1);
+        tty->x_cursor = (tty->x_cursor > n) ? tty->x_cursor - n : 0;
+        break;
+    case 'G':
+        n = arg(p, 0, 1);
+        tty->x_cursor = (n >= 1 && n <= w) ? n - 1 : (n < 1 ? 0 : w - 1);
+        break;
+    case 'H':
+    case 'f': {
+        int row = arg(p, 0, 1), col = arg(p, 1, 1);
+        if (row < 1) row = 1;
+        if (col < 1) col = 1;
+        tty->y_cursor = (row <= h) ? row - 1 : h - 1;
+        tty->x_cursor = (col <= w) ? col - 1 : w - 1;
+        break;
     }
-    else if(g_parser.state == HTERM_BRACKET){
-        if(c == '['){
-            g_parser.state = HTERM_ARGS;
+    case 'J':
+        switch (arg(p, 0, 0)) {
+        case 0: tty_erase(tty, pos, w * h); break;
+        case 1: tty_erase(tty, 0, pos + 1); break;
+        case 2:
+        case 3: tty_erase(tty, 0, w * h); break;
         }
-        else{
-            g_parser.state = HTERM_ESC;
-            tty_putchar_raw(c);
+        break;
+    case 'K': {
+        size_t line = (size_t)tty->y_cursor * w;
+        switch (arg(p, 0, 0)) {
+        case 0: tty_erase(tty, pos, line + w); break;
+        case 1: tty_erase(tty, line, pos + 1); break;
+        case 2: tty_erase(tty, line, line + w); break;
         }
+        break;
     }
-    else if(g_parser.state == HTERM_ARGS){
-        if(isdigit(c)){
-            g_parser.args[g_parser.index].value *= 10;
-            g_parser.args[g_parser.index].value += (c - '0');
-            g_parser.args[g_parser.index].empty = false;
-        }
-        else{
-            if(g_parser.index < MAX_ARGS)
-                g_parser.index++;
-            g_parser.args[g_parser.index].value = 0;
-            g_parser.args[g_parser.index].empty = true;
-            g_parser.state = HTERM_ENDARGS;
-        }
+    default:
+        break;
     }
-    if(g_parser.state == HTERM_ENDARGS){
-        if(c == ';'){
-            g_parser.state = HTERM_ARGS;
+}
+
+void hansi_handler(tty_t *tty, char c) {
+    hansi_parser *p = &tty->parser;
+
+    switch (p->state) {
+    case HTERM_BRACKET:
+        if (c == '[') {
+            p->state = HTERM_ARGS;
+            p->index = 0;
+            p->private_mode = false;
+            p->args[0].value = 0;
+            p->args[0].empty = true;
+        } else {
+            p->state = HTERM_ESC;  // unsupported ESC sequence: drop it
         }
-        else{
-            int n, m;
-            tty_t* tty = get_current_tty();
-            switch(c){
-                case 'm': // SGR - Select Graphic Rendition
-                    hansi_handle_sgr(&g_parser.args[0], g_parser.index);
-                    break;
-                case 'A': // CUU - Cursor Up
-                    if (!tty) break;
-                    n = g_parser.args[0].empty ? 1 : g_parser.args[0].value;
-                    if (n < 1) n = 1;
-                    if (tty->y_cursor >= (uint16_t)n) {
-                        tty->y_cursor -= n;
-                    } else {
-                        tty->y_cursor = 0;
-                    }
-                    break;
-                case 'B': // CUD - Cursor Down
-                    if (!tty) break;
-                    n = g_parser.args[0].empty ? 1 : g_parser.args[0].value;
-                    if (n < 1) n = 1;
-                    tty->y_cursor += n;
-                    if (tty->y_cursor >= tty->height) {
-                        tty->y_cursor = tty->height - 1;
-                    }
-                    break;
-                case 'C': // CUF - Cursor Forward
-                    if (!tty) break;
-                    n = g_parser.args[0].empty ? 1 : g_parser.args[0].value;
-                    if (n < 1) n = 1;
-                    tty->x_cursor += n;
-                    if (tty->x_cursor >= tty->width) {
-                        tty->x_cursor = tty->width - 1;
-                    }
-                    break;
-                case 'D': // CUB - Cursor Back
-                    if (!tty) break;
-                    n = g_parser.args[0].empty ? 1 : g_parser.args[0].value;
-                    if (n < 1) n = 1;
-                    if (tty->x_cursor >= (uint16_t)n) {
-                        tty->x_cursor -= n;
-                    } else {
-                        tty->x_cursor = 0;
-                    }
-                    break;
-                case 'H': // CUP - Cursor Position
-                case 'f': // HVP - same as CUP
-                    if (!tty) break;
-                    n = g_parser.args[0].empty ? 1 : g_parser.args[0].value; // row (1-based)
-                    m = g_parser.args[1].empty ? 1 : g_parser.args[1].value; // col (1-based)
-                    if (n < 1) n = 1;
-                    if (m < 1) m = 1;
-                    tty->y_cursor = n - 1; // Convert to 0-based
-                    tty->x_cursor = m - 1;
-                    // Clamp to screen bounds
-                    if (tty->y_cursor >= tty->height) {
-                        tty->y_cursor = tty->height - 1;
-                    }
-                    if (tty->x_cursor >= tty->width) {
-                        tty->x_cursor = tty->width - 1;
-                    }
-                    break;
-                case 'J': // ED - Erase in Display
-                    n = g_parser.args[0].empty ? 0 : g_parser.args[0].value;
-                    if (n == 2) {
-                        // Clear entire screen
-                        tty_clear();
-                    }
-                    // TODO: n=0 clear from cursor to end, n=1 clear from start to cursor
-                    break;
-                case 'K': // EL - Erase in Line
-                    // TODO: implement line erase
-                    break;
-                default:
-                    break;
-            }
-            g_parser.state = HTERM_ESC;
+        return;
+
+    case HTERM_ARGS:
+        if (c >= '0' && c <= '9') {
+            p->args[p->index].value = p->args[p->index].value * 10 + (c - '0');
+            p->args[p->index].empty = false;
+        } else if (c == ';') {
+            if (p->index < MAX_ARGS - 1) p->index++;
+            p->args[p->index].value = 0;
+            p->args[p->index].empty = true;
+        } else if (c >= 0x3C && c <= 0x3F) {
+            p->private_mode = true;   // ESC[? ... etc.
+        } else if (c >= 0x20 && c <= 0x2F) {
+            // intermediate bytes: ignored
+        } else if (c >= 0x40 && c <= 0x7E) {
+            p->index++;
+            if (!p->private_mode) handle_csi(tty, p, c);
+            p->state = HTERM_ESC;
+        } else {
+            p->state = HTERM_ESC;     // malformed: give up on the sequence
+            tty_put_raw(tty, c);
         }
+        return;
+
+    default:
+        if (c == '\033') {
+            p->state = HTERM_BRACKET;
+        } else {
+            tty_put_raw(tty, c);
+        }
+        return;
     }
 }

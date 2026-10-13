@@ -33,17 +33,6 @@ int64_t sys_write(uint64_t fd, uint64_t buf, uint64_t count,
         return -EBADF;
     }
     file_t *f = current->fd_table[fd];
-    if ((f->flags & O_ACCMODE) == O_RDONLY) return -EBADF;
-
-    // TTYs take the fast tty_putchar path (handles escapes, no full repaint)
-    if (f->inode && f->inode->f_ops && f->inode->f_ops->write == tty_write) {
-        if (!get_current_tty()) return -EIO;
-        for (size_t i = 0; i < count; i++) {
-            tty_putchar(user_buf[i]);
-        }
-        return (int64_t)count;
-    }
-
     return vfs_write(f, user_buf, count);
 }
 
@@ -392,4 +381,16 @@ int64_t sys_fcntl(uint64_t fd, uint64_t cmd, uint64_t arg,
     default:
         return -EINVAL;
     }
+}
+
+int64_t sys_ioctl(uint64_t fd, uint64_t request, uint64_t arg,
+                  uint64_t arg4, uint64_t arg5, uint64_t arg6) {
+    (void)arg4; (void)arg5; (void)arg6;
+    task_t *current = get_current_task();
+    if (!current) return -ESRCH;
+    if (fd >= MAX_FDS || !current->fd_table[fd]) return -EBADF;
+
+    file_t *f = current->fd_table[fd];
+    if (!f->inode || !f->inode->f_ops || !f->inode->f_ops->ioctl) return -ENOTTY;
+    return f->inode->f_ops->ioctl(f, request, (void *)arg);
 }
