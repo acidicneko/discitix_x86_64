@@ -32,6 +32,7 @@ SOFTWARE. */
 #include <drivers/rtc.h>
 #include <drivers/serial.h>
 #include <drivers/tty/psf2.h>
+#include <drivers/null.h>
 #include <drivers/tty/tty.h>
 #include <fs/fat32.h>
 #include <fs/stripFS.h>
@@ -105,6 +106,7 @@ void init_kernel() {
   mount_filesystem();
   // init_procfs();
   devfs_init();
+  init_null_device(); 
   init_syscalls();
   init_tty();
   init_serial_device();
