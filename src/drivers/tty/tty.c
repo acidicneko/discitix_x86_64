@@ -59,6 +59,7 @@ void init_tty() {
       .id = i,
       .fg = colors[7],
       .bg = colors[0],
+      .fg_index = 7,
       .parser = { .state = HTERM_ESC },
       .tty_ops = tty_file_ops,
       .ldisc_mode = TTY_CANONICAL,

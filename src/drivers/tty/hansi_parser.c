@@ -12,27 +12,32 @@ static int arg(hansi_parser *p, int i, int def) {
     return p->args[i].value;
 }
 
+static void set_fg_index(tty_t *tty, int index) {
+    tty->fg_index = index;
+    tty->fg = tty->colors[index + (tty->bold ? 8 : 0)];
+}
+
 static void handle_sgr(tty_t *tty, hansi_parser *p) {
     for (int i = 0; i < p->index; i++) {
         int attr = p->args[i].empty ? 0 : p->args[i].value;
 
         if (attr == 0) {
-            tty->fg = tty->colors[7];
+            tty->bold = false;
+            set_fg_index(tty, 7);
             tty->bg = tty->colors[0];
-            tty->bold = false;
-        } else if (attr == 1) {
-            tty->bold = true;
-        } else if (attr == 22) {
-            tty->bold = false;
+        } else if (attr == 1 || attr == 22) {
+            tty->bold = (attr == 1);
+            if (tty->fg_index >= 0) set_fg_index(tty, tty->fg_index);
         } else if (attr >= 30 && attr <= 37) {
-            tty->fg = tty->colors[(attr - 30) + (tty->bold ? 8 : 0)];
+            set_fg_index(tty, attr - 30);
         } else if (attr == 39) {
-            tty->fg = tty->colors[7];
+            set_fg_index(tty, 7);
         } else if (attr >= 40 && attr <= 47) {
             tty->bg = tty->colors[attr - 40];
         } else if (attr == 49) {
             tty->bg = tty->colors[0];
         } else if (attr >= 90 && attr <= 97) {
+            tty->fg_index = -1;
             tty->fg = tty->colors[(attr - 90) + 8];
         } else if (attr >= 100 && attr <= 107) {
             tty->bg = tty->colors[(attr - 100) + 8];

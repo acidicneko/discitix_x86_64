@@ -43,6 +43,7 @@ typedef struct tty {
   uint32_t fg;
   uint32_t bg;
   bool bold;
+  int8_t fg_index;   // 0-7 for a basic SGR color (bold brightens it), else -1
   hansi_parser parser;
 
   // Line discipline modes
