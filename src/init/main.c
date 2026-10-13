@@ -199,8 +199,8 @@ void kmain() {
   init_kernel();
   sysfetch();
 
-  char* argv[] = {"sh", NULL};
-  task_t* elf_task = run_elf_from_initrd("/bin/sh", 1, argv);
+  char* argv[] = {"dash", NULL};
+  task_t* elf_task = run_elf_from_initrd("/bin/dash", 1, argv);
   if (elf_task) {
       log("ELF",INFO,"Created task id=%d from initrd\n\r", elf_task->id);
   } else {

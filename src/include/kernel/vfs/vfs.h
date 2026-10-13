@@ -42,6 +42,9 @@ struct inode{
 
     uint8_t type;         // File type: FT_REG, FT_DIR, FT_CHR, etc.
     uint8_t is_directory; // Legacy (kept for compatibility, use type == FT_DIR instead)
+                          //
+
+    int is_pipe_write_end;
 };
 
 typedef struct dentry {
@@ -66,6 +69,7 @@ struct file {
     uint32_t flags;
     file_operations_t *f_ops;
     uint64_t offset;
+    uint32_t refcount;
 };
 
 struct file_operations {

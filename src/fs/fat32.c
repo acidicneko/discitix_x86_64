@@ -4,6 +4,7 @@
 #include <libk/string.h>
 #include <mm/liballoc.h>
 #include <libk/stdio.h>
+#include <sys/stat.h>
 
 static uint32_t fat_start_lba;
 static uint32_t data_start_lba;
@@ -505,9 +506,11 @@ inode_t *fat32_vfs_lookup(inode_t *parent, const char *name) {
 
                     if (entries[e].attributes & FAT_ATTR_DIRECTORY) {
                         new_inode->type = FT_DIR;
+                        new_inode->mode = S_IFDIR | 0755;
                         new_inode->is_directory = 1;
                     } else {
                         new_inode->type = FT_REG;
+                        new_inode->mode = S_IFREG | 0755;
                         new_inode->is_directory = 0;
                     }
 

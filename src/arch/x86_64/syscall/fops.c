@@ -143,6 +143,7 @@ int64_t sys_close(uint64_t fd, uint64_t arg2, uint64_t arg3,
     file_t *f = current->fd_table[fd];
     vfs_close(f);
     current->fd_table[fd] = NULL;
+    current->fd_cloexec &= ~(1u << fd);
     
     return 0;
 }
@@ -348,4 +349,83 @@ int64_t sys_lseek(uint64_t fd, uint64_t offset, uint64_t whence,
     f->offset = (uint32_t)new_offset;
     
     return new_offset;
+}
+
+
+int64_t sys_dup2(uint64_t oldfd, uint64_t newfd, uint64_t arg3,
+                  uint64_t arg4, uint64_t arg5, uint64_t arg6) {
+    (void)arg3; (void)arg4; (void)arg5; (void)arg6;
+
+    task_t *current = get_current_task();
+    if (!current) return -1;
+
+    if (oldfd >= MAX_FDS || newfd >= MAX_FDS) return -1;
+    if (!current->fd_table[oldfd]) return -1;
+
+    if (oldfd == newfd) return (int64_t)newfd; // no-op, POSIX-correct
+
+    // Drop our reference to whatever newfd held. vfs_close only runs the
+    // driver close hook (and frees the file) when this was the last ref.
+    if (current->fd_table[newfd]) {
+        vfs_close(current->fd_table[newfd]);
+        current->fd_table[newfd] = NULL;
+    }
+
+    current->fd_table[newfd] = current->fd_table[oldfd];
+    current->fd_table[newfd]->refcount++; 
+    current->fd_cloexec &= ~(1u << newfd);  // dup2 never copies FD_CLOEXEC
+
+    return (int64_t)newfd;
+}
+
+// fcntl command numbers and errnos as defined by newlib (userland ABI)
+#define FCNTL_F_DUPFD          0
+#define FCNTL_F_GETFD          1
+#define FCNTL_F_SETFD          2
+#define FCNTL_F_GETFL          3
+#define FCNTL_F_SETFL          4
+#define FCNTL_F_DUPFD_CLOEXEC  14
+#define FCNTL_FD_CLOEXEC       1
+#define FCNTL_EBADF            9
+#define FCNTL_EINVAL           22
+#define FCNTL_EMFILE           24
+
+int64_t sys_fcntl(uint64_t fd, uint64_t cmd, uint64_t arg,
+                  uint64_t arg4, uint64_t arg5, uint64_t arg6) {
+    (void)arg4; (void)arg5; (void)arg6;
+
+    task_t *current = get_current_task();
+    if (!current) return -FCNTL_EBADF;
+    if (fd >= MAX_FDS || !current->fd_table[fd]) return -FCNTL_EBADF;
+
+    switch (cmd) {
+    case FCNTL_F_DUPFD:
+    case FCNTL_F_DUPFD_CLOEXEC: {
+        // Lowest free descriptor >= arg
+        if (arg >= MAX_FDS) return -FCNTL_EINVAL;
+        for (uint64_t newfd = arg; newfd < MAX_FDS; newfd++) {
+            if (current->fd_table[newfd]) continue;
+            current->fd_table[newfd] = current->fd_table[fd];
+            current->fd_table[newfd]->refcount++;
+            if (cmd == FCNTL_F_DUPFD_CLOEXEC)
+                current->fd_cloexec |= (1u << newfd);
+            else
+                current->fd_cloexec &= ~(1u << newfd);
+            return (int64_t)newfd;
+        }
+        return -FCNTL_EMFILE;
+    }
+    case FCNTL_F_GETFD:
+        return (current->fd_cloexec & (1u << fd)) ? FCNTL_FD_CLOEXEC : 0;
+    case FCNTL_F_SETFD:
+        if (arg & FCNTL_FD_CLOEXEC) current->fd_cloexec |= (1u << fd);
+        else                        current->fd_cloexec &= ~(1u << fd);
+        return 0;
+    case FCNTL_F_GETFL:
+        return (int64_t)current->fd_table[fd]->flags;
+    case FCNTL_F_SETFL:
+        return 0;  // O_NONBLOCK/O_APPEND not supported yet; accept silently
+    default:
+        return -FCNTL_EINVAL;
+    }
 }

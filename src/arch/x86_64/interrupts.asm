@@ -155,53 +155,53 @@ syscall_stub:
 
 ; Helper to jump to Ring 3 user mode
 ; void jump_to_usermode(uint64_t entry, uint64_t user_stack)
-global jump_to_usermode
-jump_to_usermode:
-    ; rdi = user entry point
-    ; rsi = user stack pointer
-    
-    ; Set up stack frame for iretq
-    ; Stack needs: SS, RSP, RFLAGS, CS, RIP
-    
-    mov rcx, rdi        ; Save entry point
-    mov rdx, rsi        ; Save stack pointer
-    
-    ; Push SS (user data segment with RPL 3)
-    mov rax, 0x18 | 3   ; GDT_USER_DATA | RPL 3
-    push rax
-    
-    ; Push RSP (user stack pointer)
-    push rdx
-    
-    ; Push RFLAGS (enable interrupts)
-    pushfq
-    pop rax
-    or rax, 0x200       ; Set IF (interrupt flag)
-    push rax
-    
-    ; Push CS (user code segment with RPL 3)
-    mov rax, 0x20 | 3   ; GDT_USER_CODE | RPL 3
-    push rax
-    
-    ; Push RIP (user entry point)
-    push rcx
-    
-    ; Clear registers for clean usermode entry
-    xor rax, rax
-    xor rbx, rbx
-    xor rcx, rcx
-    xor rdx, rdx
-    xor rsi, rsi
-    xor rdi, rdi
-    xor rbp, rbp
-    xor r8, r8
-    xor r9, r9
-    xor r10, r10
-    xor r11, r11
-    xor r12, r12
-    xor r13, r13
-    xor r14, r14
-    xor r15, r15
-    
-    ; Switch to user mode!
-    iretq
+; global jump_to_usermode
+; jump_to_usermode:
+;     ; rdi = user entry point
+;     ; rsi = user stack pointer
+;
+;     ; Set up stack frame for iretq
+;     ; Stack needs: SS, RSP, RFLAGS, CS, RIP
+;
+;     mov rcx, rdi        ; Save entry point
+;     mov rdx, rsi        ; Save stack pointer
+;
+;     ; Push SS (user data segment with RPL 3)
+;     mov rax, 0x18 | 3   ; GDT_USER_DATA | RPL 3
+;     push rax
+;
+;     ; Push RSP (user stack pointer)
+;     push rdx
+;
+;     ; Push RFLAGS (enable interrupts)
+;     pushfq
+;     pop rax
+;     or rax, 0x200       ; Set IF (interrupt flag)
+;     push rax
+;
+;     ; Push CS (user code segment with RPL 3)
+;     mov rax, 0x20 | 3   ; GDT_USER_CODE | RPL 3
+;     push rax
+;
+;     ; Push RIP (user entry point)
+;     push rcx
+;
+;     ; Clear registers for clean usermode entry
+;     xor rax, rax
+;     xor rbx, rbx
+;     xor rcx, rcx
+;     xor rdx, rdx
+;     xor rsi, rsi
+;     xor rdi, rdi
+;     xor rbp, rbp
+;     xor r8, r8
+;     xor r9, r9
+;     xor r10, r10
+;     xor r11, r11
+;     xor r12, r12
+;     xor r13, r13
+;     xor r14, r14
+;     xor r15, r15
+;
+;     ; Switch to user mode!
+;     iretq

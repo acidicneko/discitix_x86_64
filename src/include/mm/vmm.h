@@ -35,6 +35,9 @@ void vmm_switch_page_table(uint64_t cr3_phys);
 // Get current CR3
 uint64_t vmm_get_cr3(void);
 
+// Get the kernel's own CR3 (safe to run on when no user address space is valid)
+uint64_t vmm_get_kernel_cr3(void);
+
 // Free a user page table (frees only user-space entries, not kernel)
 void vmm_free_user_page_table(uint64_t cr3_phys);
 

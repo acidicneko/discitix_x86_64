@@ -6,8 +6,11 @@
 	path = stripFS
 	url = https://github.com/acidicneko/stripFS.git
 [submodule "tcc_discitix"]
-	path = tcc_discitix
+	path = ports/tcc/src
 	url = https://github.com/acidicneko/tcc_discitix.git
 [submodule "lua"]
-	path = lua
+	path = ports/lua/src
 	url = https://github.com/lua/lua.git
+[submodule "dash"]
+	path = ports/dash/src
+	url = git://git.kernel.org/pub/scm/utils/dash/dash.git

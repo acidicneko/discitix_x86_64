@@ -31,6 +31,10 @@ uint64_t vmm_get_cr3(void) {
     return read_cr3();
 }
 
+uint64_t vmm_get_kernel_cr3(void) {
+    return kernel_cr3;
+}
+
 void vmm_switch_page_table(uint64_t cr3_phys) {
     write_cr3(cr3_phys);
 }

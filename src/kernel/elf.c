@@ -1,6 +1,7 @@
 #include <kernel/elf.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
+#include <mm/liballoc.h>
 #include <libk/string.h>
 #include <libk/utils.h>
 
@@ -104,13 +105,16 @@ static int elf_load_impl(const void* data, size_t size, elf_info_t* info, uint64
     log("ELF", INFO, "Loading %d pages at 0x%xl - 0x%xl (cr3=0x%xl)\n\r", 
           (int)total_pages, lowest_addr, highest_addr, cr3_phys);
     
-    // Allocate page tracking array (stores both user and kernel vaddrs)
-    elf_page_t* page_map = (elf_page_t*)pmalloc(1);
+    // Allocate page tracking array (stores both user and kernel vaddrs).
+    // Sized from total_pages, which is an upper bound (overlapping segments
+    // are only mapped once). Freed with kfree.
+    size_t map_bytes = total_pages * sizeof(elf_page_t);
+    elf_page_t* page_map = (elf_page_t*)kmalloc(map_bytes);
     if (!page_map) {
         log("ELF", ERROR, "Failed to allocate page tracking\n\r");
         return -1;
     }
-    memset(page_map, 0, 4096);
+    memset(page_map, 0, map_bytes);
     size_t num_mapped = 0;
     
     info->pages = (void**)page_map;  // Reuse pages pointer for tracking
@@ -277,7 +281,7 @@ void elf_free(elf_info_t* info) {
     if (info->pages) {
         // TODO: unmap pages from page tables
         // TODO: free physical pages
-        pmm_free_pages(info->pages, 1);
+        kfree(info->pages);
         info->pages = NULL;
     }
     

@@ -156,20 +156,21 @@ void handleKey_normal(uint8_t scancode){
 
   if (isCtrl) {
     switch(scancode) {
-      case KEY_1:
-        tty_switch(0);
-        return;
-      case KEY_2:
-        tty_switch(1);
-        return;
-      case KEY_3:
-        tty_switch(2);
-        return;
-      case KEY_4:
-        tty_switch(3);
+      case KEY_1: tty_switch(0); return;
+      case KEY_2: tty_switch(1); return;
+      case KEY_3: tty_switch(2); return;
+      case KEY_4: tty_switch(3); return;
+    }
+
+    char base = keyMap_normal[scancode < 58 ? scancode : 0];
+    if (base >= 'a' && base <= 'z') {
+        uint8_t ctrl_code = (uint8_t)(base - 'a' + 1);
+        tty_t* tty = get_current_tty();
+        if (tty) tty_input_char(tty, ctrl_code);
         return;
     }
-  }
+    return;
+  }  
 
   char ascii = translate(scancode); /*translate the scancode*/
   if(ascii > 0){                    /*if it's a printable character*/

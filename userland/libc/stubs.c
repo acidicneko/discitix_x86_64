@@ -2,10 +2,11 @@
 #include <sys/stat.h>
 #include <sys/times.h>
 #include <sys/fcntl.h>
+#include <stdarg.h>
 #include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
-
+#include <termios.h>
 #undef errno
 extern int errno;
 
@@ -32,6 +33,10 @@ extern int errno;
 #define SYS_MKDIR      17
 #define SYS_UNLINK     18
 #define SYS_LSEEK      19
+#define SYS_PIPE       20
+#define SYS_DUP2       21
+#define SYS_GETPID     22
+#define SYS_FCNTL      23
 
 static inline long _syscall0(long num) {
     long ret;
@@ -132,6 +137,10 @@ int fstat(int fd, struct stat *buf) {
     return 0;
 }
 
+// On a system without symlinks, lstat is identical to stat
+int lstat(const char *__restrict path, struct stat *__restrict buf) {
+    return stat(path, buf);
+}
 
 
 // ============================================================================
@@ -182,20 +191,16 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
     if (ret < 0) { errno = (int)-ret; return -1; }
     return (int)ret;
 }
+
 int waitpid(int pid, int *status, int options) {
-    long ret;
-    while (1) {
-        ret = _syscall3(SYS_WAITPID, (long)pid, (long)status, (long)options);
-        if (ret != -2) {
-            if (ret < 0) return -1;
-            return (int)ret;
-        }
-        for (volatile int i = 0; i < 10000; i++);
-    }
+   long ret = _syscall3(SYS_WAITPID, (long)pid, (long)status, (long)options);
+   if (ret < 0) { errno = ECHILD; return -1; }
+   return (int)ret;
 }
 
 int getpid(void) {
-    return 1; // Default fallback representation until SYS_GETPID implementation
+    int pid = _syscall0(SYS_GETPID);
+    return pid;
 }
 
 // Custom Extension Hook (Optional utility preservation)
@@ -290,7 +295,9 @@ int kill(int pid, int sig) {
     errno = EINVAL;
     return -1;
 }
-
+int killpg(pid_t pid, int sig) {
+    return kill(-pid, sig);
+}
 int link(char *old, char *new) {
     errno = EMLINK;
     return -1;
@@ -439,16 +446,191 @@ int gettimeofday(struct timeval *restrict tv, void *restrict tz) {
     return 0;
 }
 
-// Needed to satisfy the Newlib/CRT destructor hooks since we dropped crtn.o
-// void _fini(void) {
-//     // Intentionally blank
-// }
+// Programs linked with only crt0.o (gcc builds) need a _fini for newlib's
+// __call_atexit. Weak, so the real one in crti.o wins when it's linked
+// (tcc links crt1.o/crti.o/crtn.o) instead of clashing as "defined twice".
+__attribute__((weak)) void _fini(void) {
+    // Intentionally blank
+}
 
 pid_t wait(int *wstatus) {
     return waitpid(-1, wstatus, 0);
+}
+
+struct rusage;
+pid_t wait3(int *status, int options, struct rusage *rusage) {
+    (void)rusage;
+    return waitpid((pid_t)-1, status, options);
 }
 
 int getuid(void) { return 0; }
 int geteuid(void) { return 0; }
 int getgid(void) { return 0; }
 int getegid(void) { return 0; }
+
+
+int dup2(int oldfd, int newfd) {
+    long ret = _syscall2(SYS_DUP2, (long)oldfd, (long)newfd);
+
+    if (ret < 0) {
+        errno = (int)(-ret);
+        return -1;
+    }
+
+    return (int)ret;
+}
+
+int pipe(int pipedev[2]) {
+    if (pipedev == NULL) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    long ret = _syscall1(SYS_PIPE, (long)pipedev);
+
+    if (ret < 0) {
+        errno = (int)(-ret);
+        return -1;
+    }
+
+    return 0; // Success
+}
+
+int fcntl(int fd, int cmd, ...) {
+    va_list ap;
+    va_start(ap, cmd);
+    long arg = va_arg(ap, long);  // F_GETFD/F_GETFL ignore it
+    va_end(ap);
+    long ret = _syscall3(SYS_FCNTL, (long)fd, (long)cmd, arg);
+    if (ret < 0) { errno = (int)-ret; return -1; }
+    return (int)ret;
+}
+
+unsigned int alarm(unsigned int seconds) { (void)seconds; return 0; }
+#include <stdarg.h>
+#define TIOCGWINSZ 0x5413
+struct winsize { unsigned short ws_row, ws_col, ws_xpixel, ws_ypixel; };
+int ioctl(int fd, unsigned long request, ...) {
+    va_list ap;
+    va_start(ap, request);
+    void *arg = va_arg(ap, void*);
+    va_end(ap);
+
+    if (request == TIOCGWINSZ) {
+        struct winsize *ws = (struct winsize*)arg;
+        ws->ws_row = 25; ws->ws_col = 80; // hardcode for now
+        ws->ws_xpixel = 0; ws->ws_ypixel = 0;
+        return 0;
+    }
+    errno = ENOSYS;
+    return -1;
+}
+
+
+// THIS FILE IS GETTING OUT OF HAND BRUHHH
+
+
+// ---- signals: minimal stubs (no real delivery yet) ----
+int sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
+    (void)how; (void)set; (void)oldset;
+    return 0;
+}
+
+int sigsuspend(const sigset_t *mask) {
+    (void)mask;
+    // No real signal delivery yet, so nothing will ever wake this except
+    // returning immediately. Real semantics: block until ANY signal is
+    // delivered. For now, just return -1/EINTR-like immediately so
+    // callers (like dash's waitproc retry loop) don't hang forever.
+    errno = EINTR;
+    return -1;
+}
+
+// ---- process groups / job control: stubs, no real pgid tracking yet ----
+pid_t setpgid(pid_t pid, pid_t pgid) {
+    (void)pid; (void)pgid;
+    return 0; // pretend it worked; every process is effectively its own group
+}
+
+pid_t getpgrp(void) {
+    return getpid(); // no real groups -- every task is its own "group"
+}
+
+pid_t tcgetpgrp(int fd) {
+    (void)fd;
+    return getpid(); // pretend current task is always foreground
+}
+
+int tcsetpgrp(int fd, pid_t pgrp) {
+    (void)fd; (void)pgrp;
+    return 0; // no-op
+}
+
+pid_t getppid(void) {
+    // You don't have a syscall for this yet -- add one (SYS_GETPPID ->
+    // current->parent_id) for a real answer. Placeholder for now:
+    return 1;
+}
+
+// ---- vfork: fall back to plain fork ----
+pid_t vfork(void) {
+    return fork(); // semantically weaker (no shared address space until
+                    // exec) but functionally correct for dash's usage
+                    // pattern (vfork immediately followed by exec/exit)
+}
+
+// ---- misc ----
+mode_t umask(mode_t mask) {
+    (void)mask;
+    return 0; // no permission model yet -- pretend old mask was 0, ignore new one
+}
+
+int dup(int oldfd) {
+    return fcntl(oldfd, F_DUPFD, 0);
+}
+int getgroups(int size, gid_t list[]) {
+    (void)size; (void)list;
+    return 0; // no supplementary groups -- report zero groups
+}
+
+struct sigaction;
+int sigaction(int sig, const struct sigaction *act, struct sigaction *oldact) {
+    (void)sig; (void)act; (void)oldact;
+    return 0; // no-op, matches your earlier signal() stub philosophy
+}
+
+
+// crt.c
+
+int tcgetattr(int fd, struct termios *t) {
+    (void)fd;
+    if (!t) return -1;
+    t->c_iflag = ICRNL | IXON;
+    t->c_oflag = OPOST | ONLCR;
+    t->c_cflag = CS8 | CREAD | CLOCAL;
+    t->c_lflag = ISIG | ICANON | ECHO | ECHOE | ECHOK;
+    for (int i = 0; i < NCCS; i++) t->c_cc[i] = 0;
+    t->c_cc[VINTR] = 3;
+    t->c_cc[VQUIT] = 28;
+    t->c_cc[VERASE] = 127;
+    t->c_cc[VKILL] = 21;
+    t->c_cc[VEOF] = 4;
+    t->c_ispeed = 0;
+    t->c_ospeed = 0;
+    return 0;
+}
+
+int tcsetattr(int fd, int action, const struct termios *t) {
+    (void)fd; (void)action; (void)t;
+    return 0;
+}
+
+int tcflush(int fd, int queue) {
+    (void)fd; (void)queue;
+    return 0;
+}
+
+speed_t cfgetispeed(const struct termios *t) { return t->c_ispeed; }
+speed_t cfgetospeed(const struct termios *t) { return t->c_ospeed; }
+int cfsetispeed(struct termios *t, speed_t speed) { t->c_ispeed = speed; return 0; }
+int cfsetospeed(struct termios *t, speed_t speed) { t->c_ospeed = speed; return 0; }

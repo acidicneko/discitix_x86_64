@@ -70,7 +70,7 @@ static void sweep_wakeup(void) {
     uint64_t ticks = get_ticks();
     task_t *t = task_list;
     do {
-        if (t->state == TASK_BLOCKED && t->wake_tick <= ticks) {
+        if (t->state == TASK_BLOCKED && t->sleeping && t->wake_tick <= ticks) {
             t->state = TASK_RUNNABLE;
             log("SCHED",INFO,"wake task id=%d\n\r", t->id);
         }
@@ -86,8 +86,10 @@ void scheduler_sleep(uint64_t ticks) {
         return;
     }
     c->wake_tick = get_ticks() + ticks;
+    c->sleeping = 1;
     c->state = TASK_BLOCKED;
     while (c->state == TASK_BLOCKED) asm volatile("hlt");
+    c->sleeping = 0;
 }
 
 
@@ -96,9 +98,9 @@ void schedule_tick(register_t *regs) {
     sweep_wakeup();
     
     if (!current) {
-        task_t *main_task = (task_t *)pmalloc(1);
+        task_t *main_task = (task_t *)kmalloc(sizeof(task_t));
         if (!main_task) return;
-        memset(main_task, 0, 4096);
+        memset(main_task, 0, sizeof(task_t));
         main_task->state = TASK_RUNNING;
         memcpy((uint8_t *)&main_task->regs, (const uint8_t *)regs, sizeof(register_t));
         task_enqueue(main_task);
@@ -115,7 +117,11 @@ void schedule_tick(register_t *regs) {
     task_t *next = current->next;
     while (next && next->state != TASK_RUNNABLE) {
         if (next == current) {
-            current->state = TASK_RUNNING;
+            // Nothing else can run. Keep running current's context, but only
+            // mark it RUNNING if it was runnable: a BLOCKED or ZOMBIE task
+            // just keeps halting in its kernel loop with its state intact.
+            if (current->state == TASK_RUNNABLE)
+                current->state = TASK_RUNNING;
             return;
         }
         next = next->next;
@@ -131,6 +137,10 @@ void schedule_tick(register_t *regs) {
         if (current->cr3 != 0) {
             vmm_switch_page_table(current->cr3);
         }
+    } else {
+        // Kernel tasks must not keep running on the last user task's CR3:
+        // that task may exit and free its page table.
+        vmm_switch_page_table(vmm_get_kernel_cr3());
     }
 
     memcpy((uint8_t *)regs, (const uint8_t *)&current->regs, sizeof(register_t));
@@ -174,34 +184,41 @@ task_t *create_elf_task_args(const void *elf_data, size_t elf_size, size_t stack
     void *ustack = pmalloc(2); 
     
     if (!t || !kernel_stack || !ustack) {
-        if (t) pmm_free_pages(t, 1);
+        if (t) kfree(t);
         if (kernel_stack) pmm_free_pages(kernel_stack, stack_pages);
         if (ustack) pmm_free_pages(ustack, 2);
         elf_free(&elf_info);
         vmm_free_user_page_table(task_cr3);
         return NULL;
     }
-    memset(t, 0, 4096);
+    memset(t, 0, sizeof(task_t));
     t->brk_start   = elf_info.end_addr;
     t->brk_current = elf_info.end_addr;
-    uint64_t user_flags = PTE_PRESENT | PTE_RW | PTE_USER;
-    void *ustack_phys1 = phys_from_virt(ustack);
-    void *ustack_phys2 = phys_from_virt((void*)((uint64_t)ustack + 4096));
-    
-    if (vmm_map_page_in(task_cr3, (void*)USER_STACK_TOP_VADDR, ustack_phys1, user_flags) != 0 ||
-        vmm_map_page_in(task_cr3, (void*)(USER_STACK_TOP_VADDR + 4096), ustack_phys2, user_flags) != 0) {
-        pmm_free_pages(t, 1);
+
+    // Build the stack contents before mapping, so a failure here only has to
+    // free the unmapped pages.
+    user_stack_result_t stack_res;
+    if (build_user_stack((uint8_t*)ustack, USER_STACK_TOP_VADDR - USER_STACK_VADDR,
+                          USER_STACK_VADDR, argc, argv, envc, envp, &stack_res) != 0) {
+        kfree(t);
         pmm_free_pages(kernel_stack, stack_pages);
         pmm_free_pages(ustack, 2);
         elf_free(&elf_info);
         vmm_free_user_page_table(task_cr3);
         return NULL;
     }
+
+    // Stack occupies [USER_STACK_VADDR, USER_STACK_TOP_VADDR), same as sys_exec.
+    uint64_t user_flags = PTE_PRESENT | PTE_RW | PTE_USER;
+    void *ustack_phys1 = phys_from_virt(ustack);
+    void *ustack_phys2 = phys_from_virt((void*)((uint64_t)ustack + 4096));
     
-    user_stack_result_t stack_res;
-    if (build_user_stack((uint8_t*)ustack, 8192, USER_STACK_TOP_VADDR,
-                          argc, argv, envc, envp, &stack_res) != 0) {
-        pmm_free_pages(t, 1);
+    if (vmm_map_page_in(task_cr3, (void*)USER_STACK_VADDR, ustack_phys1, user_flags) != 0 ||
+        vmm_map_page_in(task_cr3, (void*)(USER_STACK_VADDR + 4096), ustack_phys2, user_flags) != 0) {
+        // Unmap whatever got mapped so the page table free doesn't free it too.
+        vmm_unmap_page_in(task_cr3, (void*)USER_STACK_VADDR);
+        vmm_unmap_page_in(task_cr3, (void*)(USER_STACK_VADDR + 4096));
+        kfree(t);
         pmm_free_pages(kernel_stack, stack_pages);
         pmm_free_pages(ustack, 2);
         elf_free(&elf_info);
@@ -248,39 +265,41 @@ task_t *fork_current_task(register_t *parent_regs) {
     uint64_t child_cr3 = vmm_clone_user_page_table(parent->cr3);
     if (child_cr3 == 0) return NULL;
 
-    task_t *child = (task_t *)pmalloc(1);
+    task_t *child = (task_t *)kmalloc(sizeof(task_t));
     void *kernel_stack = pmalloc(parent->stack_pages);
     if (!child || !kernel_stack) {
-        if (child) pmm_free_pages(child, 1);
+        if (child) kfree(child);
         if (kernel_stack) pmm_free_pages(kernel_stack, parent->stack_pages);
         vmm_free_user_page_table(child_cr3);
         return NULL;
     }
-    memset(child, 0, 4096);
+    memset(child, 0, sizeof(task_t));
 
     elf_page_t *parent_pages = (elf_page_t *)parent->user_code;
-    size_t meta_pages = (parent->user_code_pages * sizeof(elf_page_t) + 4095) / 4096;
-    if (meta_pages == 0) meta_pages = 1;
-    elf_page_t *child_pages = (elf_page_t *)pmalloc(meta_pages);
+    size_t meta_bytes = parent->user_code_pages * sizeof(elf_page_t);
+    if (meta_bytes == 0) meta_bytes = sizeof(elf_page_t);
+    elf_page_t *child_pages = (elf_page_t *)kmalloc(meta_bytes);
     if (!child_pages) {
         pmm_free_pages(kernel_stack, parent->stack_pages);
-        pmm_free_pages(child, 1);
+        kfree(child);
         vmm_free_user_page_table(child_cr3);
         return NULL;
     }
-    memset(child_pages, 0, meta_pages * 4096);
+    memset(child_pages, 0, meta_bytes);
 
     for (size_t i = 0; i < parent->user_code_pages; i++) {
         uint64_t u_vaddr = parent_pages[i].user_vaddr;
         uint64_t pte = vmm_get_pte(child_cr3, u_vaddr);
-        void *c_phys = (void*)(pte & 0x000ffffffffff000ULL);
         child_pages[i].user_vaddr   = u_vaddr;
-        child_pages[i].kernel_vaddr = virt_from_phys(c_phys);
+        child_pages[i].kernel_vaddr = (pte & PTE_PRESENT)
+            ? virt_from_phys((void*)(pte & 0x000ffffffffff000ULL)) : NULL;
     }
 
-    uint64_t stack_pte = vmm_get_pte(child_cr3, USER_STACK_TOP_VADDR);
-    void *stack_phys = (void*)(stack_pte & 0x000ffffffffff000ULL);
-    void *child_user_stack = virt_from_phys(stack_phys);
+    // Informational only: the cloned stack frames aren't contiguous, and they
+    // are freed with the page table, never through this pointer.
+    uint64_t stack_pte = vmm_get_pte(child_cr3, USER_STACK_VADDR);
+    void *child_user_stack = (stack_pte & PTE_PRESENT)
+        ? virt_from_phys((void*)(stack_pte & 0x000ffffffffff000ULL)) : NULL;
 
     child->stack_base = kernel_stack;
     child->brk_start   = parent->brk_start;
@@ -300,9 +319,12 @@ task_t *fork_current_task(register_t *parent_regs) {
 
     child->regs.rax = 0;
 
+    // The child shares the parent's open files; each share is a reference.
     for (int i = 0; i < MAX_FDS; i++) {
         child->fd_table[i] = parent->fd_table[i];
+        if (child->fd_table[i]) child->fd_table[i]->refcount++;
     }
+    child->fd_cloexec = parent->fd_cloexec;
 
     log("SCHED",INFO, "forked task %d -> child %d with distinct CR3\n\r", parent->id, child->id);
     task_enqueue(child);
@@ -310,3 +332,49 @@ task_t *fork_current_task(register_t *parent_regs) {
     return child;
 }
 
+// Unlink a zombie from the task list and free what sys_exit couldn't
+// (its kernel stack and the task struct). Must not be called on `current`,
+// and must not be called from IRQ context (kfree takes the allocator lock).
+void task_reap(task_t *t) {
+    if (!t || t == current || !task_list) return;
+
+    if (t == task_list) {
+        if (t->next == t) {
+            task_list = NULL;
+        } else {
+            task_t *tail = task_list;
+            while (tail->next != t) tail = tail->next;
+            task_list = t->next;
+            tail->next = task_list;
+        }
+    } else {
+        task_t *prev = task_list;
+        while (prev->next != t) {
+            prev = prev->next;
+            if (prev == task_list) return; // not in the list
+        }
+        prev->next = t->next;
+    }
+
+    if (t->stack_base) pmm_free_pages(t->stack_base, t->stack_pages);
+    kfree(t);
+}
+
+// Free zombies nobody will wait for (parent_id 0: no parent, or reparented
+// because the parent exited first).
+void reap_orphan_zombies(void) {
+    if (!task_list) return;
+    int found;
+    do {
+        found = 0;
+        task_t *t = task_list;
+        do {
+            if (t->state == TASK_ZOMBIE && t->parent_id == 0 && t != current) {
+                task_reap(t);
+                found = 1;
+                break;  // list changed, rescan
+            }
+            t = t->next;
+        } while (task_list && t != task_list);
+    } while (found && task_list);
+}

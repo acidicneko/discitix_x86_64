@@ -82,7 +82,6 @@ setup:
 	@make -C limine
 	@echo Building stripctl
 	@make -C stripFS
-	@cd userland \
-		./setup_userland.sh
+	@cd userland && ./setup-userland.sh
 
 all: clean $(IMAGE) run

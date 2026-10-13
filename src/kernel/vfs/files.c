@@ -13,12 +13,17 @@ int vfs_open(file_t **file, inode_t *inode, uint32_t flags) {
     f->flags = flags;
     f->f_ops = inode->f_ops;
     f->offset = 0;
+    f->refcount++;
     *file = f;
     return 0;
 }
 
 int vfs_close(file_t *file) {
     if (!file || !file->inode) return -1;
+    if (--file->refcount > 0) return -1;
+    if (file->inode && file->inode->f_ops && file->inode->f_ops->close) {
+        file->inode->f_ops->close(file->inode);
+    }
     kfree(file);
     return 0;
 }

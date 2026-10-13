@@ -5,6 +5,7 @@
 #include <libk/string.h>
 #include <kernel/vfs/vfs.h>
 #include <kernel/sched/scheduler.h>
+#include <kernel/ipc/pipe.h>
 #include <kernel/elf.h>
 #include <drivers/tty/tty.h>
 #include <mm/pmm.h>
@@ -14,17 +15,19 @@
 extern void syscall_stub(void);
 
 syscall_handler_t syscall_handlers[MAX_SYSCALLS];
-register_t *current_syscall_regs = NULL;
 
 int64_t syscall_dispatch(register_t* regs) {
     uint64_t syscall_num = regs->rax;
-    current_syscall_regs = regs;
-    
+
     if (syscall_num >= MAX_SYSCALLS || !syscall_handlers[syscall_num]) {
         dbgln("Unknown syscall: %d\n\r", (int)syscall_num);
-        current_syscall_regs = NULL;
         return -1;
     }
+
+    // Per task, so another task's syscall can't clobber it while this one
+    // is blocked inside the kernel.
+    task_t *task = get_current_task();
+    if (task) task->syscall_regs = regs;
     
     // Arguments are passed in: rdi, rsi, rdx, r10, r8, r9
     // (Linux x86_64 syscall convention, but r10 instead of rcx)
@@ -32,7 +35,7 @@ int64_t syscall_dispatch(register_t* regs) {
     int64_t result = handler(regs->rdi, regs->rsi, regs->rdx, 
                    regs->r10, regs->r8, regs->r9);
     
-    current_syscall_regs = NULL;
+    if (task) task->syscall_regs = NULL;
     return result;
 }
 
@@ -65,6 +68,10 @@ void init_syscalls(void) {
     syscall_register(SYS_MKDIR, sys_mkdir);
     syscall_register(SYS_UNLINK, sys_unlink);
     syscall_register(SYS_LSEEK, sys_lseek);
+    syscall_register(SYS_PIPE, sys_pipe);
+    syscall_register(SYS_DUP2, sys_dup2);
+    syscall_register(SYS_GETPID, sys_getpid);
+    syscall_register(SYS_FCNTL, sys_fcntl);
     // Set up interrupt 0x80 for syscalls
     // Flags: 0xEE = Present(1) | DPL(11) | Type(01110) = interrupt gate accessible from Ring 3
     idt_set_gate(0x80, (uint64_t)syscall_stub, GDT_KERNEL_CODE, 0xEE);

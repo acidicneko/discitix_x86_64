@@ -25,9 +25,11 @@ typedef struct task {
     size_t stack_pages;
     int id;
     uint64_t wake_tick;
+    uint8_t sleeping;      // 1 while in scheduler_sleep (only these wake on wake_tick)
     
     int parent_id;         // Parent task ID (0 if orphan/init)
     int exit_status;       // Exit status for waitpid
+    uint8_t in_waitpid;    // 1 while blocked in sys_waitpid (exit only wakes these)
     
     uint64_t cr3;          // Physical address of PML4 for this process
     
@@ -41,6 +43,8 @@ typedef struct task {
     size_t user_code_pages; // Number of user code pages (for ELF)
     uint64_t mmap_base;
     struct file *fd_table[MAX_FDS];
+    uint32_t fd_cloexec;   // Bit n set: close fd n on exec (FD_CLOEXEC)
+    register_t *syscall_regs; // Trap frame of the syscall in progress, NULL otherwise
     
     void *cwd;  
 } task_t;
@@ -56,5 +60,7 @@ task_t *find_task_by_id(int id);
 void schedule_tick(register_t *regs);
 task_t *get_current_task();
 void scheduler_sleep(uint64_t ticks);
+void task_reap(task_t *t);
+void reap_orphan_zombies(void);
 
 #endif

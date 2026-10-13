@@ -25,12 +25,13 @@
 #define SYS_MKDIR       17
 #define SYS_UNLINK      18
 #define SYS_LSEEK       19
-
+#define SYS_PIPE        20
+#define SYS_DUP2        21
+#define SYS_GETPID      22
+#define SYS_FCNTL       23
 
 #define MAX_SYSCALLS 32
 
-
-extern register_t *current_syscall_regs;
 
 // Syscall handler function type
 typedef int64_t (*syscall_handler_t)(uint64_t arg1, uint64_t arg2, uint64_t arg3, 
@@ -91,6 +92,12 @@ int64_t sys_mkdir(uint64_t path_ptr, uint64_t mode, uint64_t arg3,
 int64_t sys_unlink(uint64_t path_ptr, uint64_t arg2, uint64_t arg3,
                    uint64_t arg4, uint64_t arg5, uint64_t arg6);
 int64_t sys_lseek(uint64_t fd, uint64_t offset, uint64_t whence,
+                  uint64_t arg4, uint64_t arg5, uint64_t arg6);
+int64_t sys_dup2(uint64_t oldfd, uint64_t newfd, uint64_t arg3,
+                  uint64_t arg4, uint64_t arg5, uint64_t arg6);
+int64_t sys_getpid(uint64_t arg1, uint64_t arg2, uint64_t arg3,
+                  uint64_t arg4, uint64_t arg5, uint64_t arg6);
+int64_t sys_fcntl(uint64_t fd, uint64_t cmd, uint64_t arg,
                   uint64_t arg4, uint64_t arg5, uint64_t arg6);
 
 #endif
