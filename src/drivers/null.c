@@ -21,7 +21,7 @@ file_operations_t null_ops = {
 
 void init_null_device(){
   if(devfs_register_device("null", &null_ops, FT_CHR, NULL)==0){
-    log("NULL", INFO, "null device initialised.");
+    log("NULL", INFO, "null device initialised.\n\r");
   }
 }
 

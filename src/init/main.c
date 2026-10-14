@@ -201,8 +201,13 @@ void kmain() {
   init_kernel();
   sysfetch();
 
-  char* argv[] = {"dash", NULL};
-  task_t* elf_task = run_elf_from_initrd("/bin/dash", 1, argv);
+  char* argv[] = {"init", NULL};
+  task_t* elf_task = run_elf_from_initrd("/sbin/init", 1, argv);
+  if (!elf_task) {
+      log("ELF",ERROR,"/sbin/init failed to load, starting /bin/dash\n\r");
+      argv[0] = "dash";
+      elf_task = run_elf_from_initrd("/bin/dash", 1, argv);
+  }
   if (elf_task) {
       log("ELF",INFO,"Created task id=%d from initrd\n\r", elf_task->id);
   } else {

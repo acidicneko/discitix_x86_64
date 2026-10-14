@@ -1,0 +1,8 @@
+-- Example of a service without a tty. Rename to clock-log.lua to enable;
+-- its output goes to /var/log/clock-log.log.
+return {
+  name = "clock-log",
+  cmd = { "/bin/dash", "-c", "while true; do date; sleep 60; done" },
+  after = { "shell-tty0" },
+  respawn = true,
+}
