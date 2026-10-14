@@ -189,6 +189,37 @@ int64_t sys_fork(uint64_t arg1, uint64_t arg2, uint64_t arg3,
     return child->id;
 }
 
+#define SHEBANG_MAX   256
+#define SHEBANG_DEPTH 4
+
+static char *kstrdup(const char *s) {
+  size_t len = strlen(s) + 1;
+  char *d = (char *)kmalloc(len);
+  if (d) memcpy((uint8_t *)d, (const uint8_t *)s, len);
+  return d;
+}
+
+// Splits "#!interp [arg]" (buf holds len bytes, has room for a terminator).
+// Everything after the interpreter is one argument, as on Linux.
+static int parse_shebang(char *buf, size_t len, char **interp, char **arg) {
+  size_t end = 2;
+  while (end < len && buf[end] != '\n') end++;
+  buf[end] = '\0';
+
+  char *p = buf + 2;
+  while (*p == ' ' || *p == '\t') p++;
+  if (!*p || *p == '\r') return -ENOEXEC;
+  *interp = p;
+  while (*p && *p != ' ' && *p != '\t' && *p != '\r') p++;
+  if (*p) *p++ = '\0';
+
+  while (*p == ' ' || *p == '\t') p++;
+  char *q = p + strlen(p);
+  while (q > p && (q[-1] == ' ' || q[-1] == '\t' || q[-1] == '\r')) *--q = '\0';
+  *arg = *p ? p : NULL;
+  return 0;
+}
+
 int64_t sys_exec(uint64_t path_ptr, uint64_t argv_ptr, uint64_t envp_ptr,
                   uint64_t arg4, uint64_t arg5, uint64_t arg6) {
   (void)arg4; (void)arg5; (void)arg6;
@@ -231,16 +262,69 @@ int64_t sys_exec(uint64_t path_ptr, uint64_t argv_ptr, uint64_t envp_ptr,
   }
 
   {
+  // Resolve #! scripts: each round replaces the program with its
+  // interpreter and rewrites argv to "interp [arg] script args...".
+  char header[SHEBANG_MAX + 1];
+  char interp_buf[SHEBANG_MAX + 1];
+  const char *exec_path = path;
   inode_t *inode = NULL;
-  err = vfs_lookup_path(path, &inode);
-  if (err != 0) goto fail;
-  err = -EACCES;
-  if (inode->type != FT_REG) goto fail;
-  err = -ENOEXEC;
-  if (inode->size == 0) goto fail;
   file_t *file = NULL;
-  err = vfs_open(&file, inode, O_RDONLY);
-  if (err != 0) goto fail;
+
+  for (int depth = 0; ; depth++) {
+      err = vfs_lookup_path(exec_path, &inode);
+      if (err != 0) goto fail;
+      err = -EACCES;
+      if (inode->type != FT_REG) goto fail;
+      err = -ENOEXEC;
+      if (inode->size < 2) goto fail;
+      err = vfs_open(&file, inode, O_RDONLY);
+      if (err != 0) goto fail;
+
+      long n = vfs_read(file, header, SHEBANG_MAX);
+      if (n < 0) { vfs_close(file); err = (int)n; goto fail; }
+      if (n < 2 || header[0] != '#' || header[1] != '!') {
+          file->offset = 0;
+          break;
+      }
+      vfs_close(file);
+      file = NULL;
+
+      err = -ELOOP;
+      if (depth == SHEBANG_DEPTH) goto fail;
+
+      char *interp, *iarg;
+      err = parse_shebang(header, (size_t)n, &interp, &iarg);
+      if (err != 0) goto fail;
+
+      int extra = iarg ? 3 : 2;
+      int rest = argv_snapped > 0 ? argv_snapped - 1 : 0;
+      err = -E2BIG;
+      if (extra + rest > MAX_EXEC_ARGS) goto fail;
+
+      err = -ENOMEM;
+      char *s_interp = kstrdup(interp);
+      char *s_arg = iarg ? kstrdup(iarg) : NULL;
+      char *s_script = kstrdup(exec_path);
+      if (!s_interp || (iarg && !s_arg) || !s_script) {
+          if (s_interp) kfree(s_interp);
+          if (s_arg) kfree(s_arg);
+          if (s_script) kfree(s_script);
+          goto fail;
+      }
+
+      if (argv_snapped > 0) kfree(argv_snap[0]);
+      memmove(&argv_snap[extra], &argv_snap[1], (size_t)rest * sizeof(char *));
+      argv_snap[0] = s_interp;
+      if (s_arg) argv_snap[1] = s_arg;
+      argv_snap[extra - 1] = s_script;
+      argv_snapped = extra + rest;
+      argc = argv_snapped;
+
+      strcpy(interp_buf, interp);
+      exec_path = interp_buf;
+      log("SYS_EXEC", INFO, "script, running interpreter '%s'\n\r", exec_path);
+  }
+
   err = -ENOMEM;
   size_t file_size = inode->size;
   void *elf_data = pmalloc((file_size + 4095) / 4096);

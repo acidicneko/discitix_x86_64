@@ -36,5 +36,6 @@
 #define ENOSYS       88
 #define ENOTEMPTY    90
 #define ENAMETOOLONG 91
+#define ELOOP        92
 
 #endif
