@@ -21,8 +21,10 @@ STRIP := $(CROSS)strip
 # build/ dir keep their debug info).
 INSTALL_PROGRAM := install -m755 -s --strip-program=$(STRIP)
 
+# The last line overrides hardening some distros' gcc enables by default
 TARGET_CFLAGS  := -I$(SYSROOT)/include -nostdlib -ffreestanding -mno-red-zone \
-                  -fno-pic -no-pie
+                  -fno-pic -no-pie \
+                  -U_FORTIFY_SOURCE -fno-stack-protector -fno-stack-clash-protection -fcf-protection=none
 TARGET_LDFLAGS := -nostdlib -static -no-pie -L$(SYSROOT)/lib -Wl,--build-id=none
 
 CRT0     := $(SYSROOT)/lib/crt0.o

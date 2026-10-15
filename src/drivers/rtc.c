@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <drivers/rtc.h>
 #include <arch/x86_64/regs.h>
-#include <stdio.h>
+#include <libk/stdio.h>
 #include <arch/x86_64/irq.h>
 #include <libk/utils.h>
 
@@ -25,16 +25,6 @@ static void cmos_write(uint8_t reg, uint8_t val) {
     outb(0x70, reg | 0x80);
     outb(0x71, val);
 }
-
-
-struct rtc_time {
-    uint8_t sec;
-    uint8_t min;
-    uint8_t hour;
-    uint8_t day;
-    uint8_t month;
-    uint16_t year;
-};
 
 
 static inline int rtc_updating(void) {

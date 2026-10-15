@@ -25,7 +25,8 @@ NEWLIB        := $(NEWLIB_PREFIX)/x86_64-elf
 BUILD         := $(HERE)/build
 
 CFLAGS := -I$(SYSROOT)/include -nostdlib -ffreestanding -mno-red-zone \
-          -fno-pic -no-pie -Wa,--noexecstack
+          -fno-pic -no-pie -Wa,--noexecstack \
+          -U_FORTIFY_SOURCE -fno-stack-protector -fno-stack-clash-protection -fcf-protection=none
 
 NEWLIB_LIBS := libm.a libg.a libnosys.a nosys.specs
 OVERLAY     := $(shell find $(HERE)/include -type f)

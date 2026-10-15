@@ -9,7 +9,8 @@ CFLAGS += \
 		-mno-red-zone \
 		-fno-pic \
 		-no-pie \
-		-Wa,--noexecstack
+		-Wa,--noexecstack \
+		-U_FORTIFY_SOURCE -fno-stack-protector -fno-stack-clash-protection -fcf-protection=none
 
 LDFLAGS += \
 		-L../../usr/lib \

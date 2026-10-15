@@ -6,6 +6,9 @@ INTERNALCFLAGS  :=       \
 	-mno-red-zone	 	\
 	-fno-pic -fno-pie \
 	-fno-stack-protector \
+	-fno-stack-clash-protection \
+	-fcf-protection=none \
+	-U_FORTIFY_SOURCE \
 	-mgeneral-regs-only	\
 	-fno-exceptions \
 	-mcmodel=kernel
@@ -33,9 +36,21 @@ userland:
 	@echo "[USERLAND]"
 	@$(MAKE) -C userland/ sysroot	
 
-$(IMAGE): $(TARGET) userland
+INITRD   = misc/initrd/initrd.img
+LIMINE   = limine/limine
+STRIPCTL = stripFS/build/stripctl
+
+$(LIMINE):
+	@$(MAKE) -C limine
+
+$(STRIPCTL):
+	@$(MAKE) -C stripFS
+
+$(INITRD): $(STRIPCTL)
 	@echo "[STRIPCTL]"
-	# @./misc/initrd/build.sh
+	@./misc/initrd/build.sh
+
+$(IMAGE): $(TARGET) userland $(LIMINE) $(INITRD)
 	@echo [CREATE IMAGE]
 	@dd if=/dev/zero of=$(IMAGE) bs=1M count=64
 	@parted -s $(IMAGE) mklabel msdos
