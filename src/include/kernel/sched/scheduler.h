@@ -51,7 +51,9 @@ typedef struct task {
 } task_t;
 
 #define USER_STACK_TOP_VADDR 0x7FFFF0000000ULL
-#define USER_STACK_VADDR     (USER_STACK_TOP_VADDR - 8192)
+#define USER_STACK_SIZE      (256 * 1024)
+#define USER_STACK_PAGES     (USER_STACK_SIZE / 4096)
+#define USER_STACK_VADDR     (USER_STACK_TOP_VADDR - USER_STACK_SIZE)
 
 void init_scheduler();
 task_t *create_elf_task_args(const void *elf_data, size_t elf_size, size_t stack_pages,
@@ -63,6 +65,7 @@ task_t *get_current_task();
 void scheduler_sleep(uint64_t ticks);
 void task_reap(task_t *t);
 void sched_wakeup(void *chan);
+int map_user_stack(uint64_t cr3, void *kaddr);
 void reap_orphan_zombies(void);
 
 #endif

@@ -86,6 +86,7 @@ extern bool tty_initialized;
 extern fb_info_t *current_fb;
 
 extern tty_t ttys[4];
+extern bool tty_graphics_mode;
 
 void init_tty();
 void init_colors(uint32_t black, uint32_t red, uint32_t green, uint32_t yellow,
@@ -99,6 +100,7 @@ void tty_putchar(char c);
 void tty_write_chars(tty_t *tty, const char *s, size_t len);
 void tty_toggle_cursor_visibility();
 void tty_repaint(tty_t *tty);
+void tty_set_graphics_mode(bool on);
 
 // Used by the ANSI parser
 void tty_put_raw(tty_t *tty, char c);

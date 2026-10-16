@@ -15,6 +15,13 @@ int vfs_open(file_t **file, inode_t *inode, uint32_t flags) {
     f->f_ops = inode->f_ops;
     f->offset = 0;
     f->refcount = 1;
+    if (inode->f_ops && inode->f_ops->open) {
+        int err = inode->f_ops->open(inode, flags);
+        if (err < 0) {
+            kfree(f);
+            return err;
+        }
+    }
     *file = f;
     return 0;
 }

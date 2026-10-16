@@ -275,7 +275,9 @@ int64_t sys_lseek(uint64_t fd, uint64_t offset, uint64_t whence,
     if (fd >= MAX_FDS || !current->fd_table[fd]) return -EBADF;
 
     file_t *f = current->fd_table[fd];
-    if (f->inode && (f->inode->type == FT_FIFO || f->inode->type == FT_CHR)) return -ESPIPE;
+    if (f->inode && (f->inode->type == FT_FIFO ||
+                     (f->inode->f_ops && f->inode->f_ops->read == tty_read)))
+        return -ESPIPE;
     int64_t new_offset = f->offset;
     
     switch (whence) {

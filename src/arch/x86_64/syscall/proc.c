@@ -13,7 +13,6 @@
 #include <stdbool.h>
 #include <libk/errno.h>
 
-#define USER_STACK_SIZE      8192 // 2 Pages
 
 extern task_t *task_list;
 
@@ -355,7 +354,7 @@ int64_t sys_exec(uint64_t path_ptr, uint64_t argv_ptr, uint64_t envp_ptr,
   }
   pmm_free_pages(elf_data, (file_size + 4095) / 4096);
 
-  void *new_stack_kaddr = pmalloc(2);
+  void *new_stack_kaddr = pmalloc(USER_STACK_PAGES);
   if (!new_stack_kaddr) {
       elf_free(&elf_info);
       vmm_free_user_page_table(new_cr3);
@@ -366,21 +365,14 @@ int64_t sys_exec(uint64_t path_ptr, uint64_t argv_ptr, uint64_t envp_ptr,
   if (build_user_stack((uint8_t*)new_stack_kaddr, USER_STACK_SIZE,
                         USER_STACK_VADDR,
                         argc, argv_snap, envc, envp_snap, &stack_res) != 0) {
-      pmm_free_pages(new_stack_kaddr, 2);
+      pmm_free_pages(new_stack_kaddr, USER_STACK_PAGES);
       elf_free(&elf_info);
       vmm_free_user_page_table(new_cr3);
       goto fail; 
   }
 
-  uint64_t user_flags = PTE_PRESENT | PTE_RW | PTE_USER;
-  if (vmm_map_page_in(new_cr3, (void*)USER_STACK_VADDR,
-                       phys_from_virt(new_stack_kaddr), user_flags) != 0 ||
-      vmm_map_page_in(new_cr3, (void*)(USER_STACK_VADDR + 4096),
-                       phys_from_virt((void*)((uint64_t)new_stack_kaddr + 4096)), user_flags) != 0) {
-      // Unmap whatever got mapped so the page table free doesn't free it too.
-      vmm_unmap_page_in(new_cr3, (void*)USER_STACK_VADDR);
-      vmm_unmap_page_in(new_cr3, (void*)(USER_STACK_VADDR + 4096));
-      pmm_free_pages(new_stack_kaddr, 2);
+  if (map_user_stack(new_cr3, new_stack_kaddr) != 0) {
+      pmm_free_pages(new_stack_kaddr, USER_STACK_PAGES);
       elf_free(&elf_info);
       vmm_free_user_page_table(new_cr3);
       goto fail;

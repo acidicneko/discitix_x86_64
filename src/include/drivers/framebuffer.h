@@ -9,6 +9,7 @@ typedef struct {
   uint32_t width;
   uint32_t height;
   uint32_t bpp;
+  uint32_t pitch;   // bytes per row, may be more than width * 4
 } fb_info_t;
 
 void init_framebuffer();

@@ -426,6 +426,62 @@ inode_operations_t fat32_inode_ops = {
  * VFS: Read (unchanged — offset is by data content, not by name)
  * --------------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------
+ * Cluster-chain cache: the clusters of a recently read file, in order, so
+ * a read at any offset finds its cluster without walking the FAT from the
+ * start (which costs one FAT sector read per 128 clusters).
+ * --------------------------------------------------------------------- */
+
+#define CHAIN_CACHE_SLOTS 4
+#define CHAIN_MAX_LEN     (1u << 24)
+
+static struct {
+    uint32_t start;
+    uint32_t len;
+    uint32_t *map;
+} chain_cache[CHAIN_CACHE_SLOTS];
+static unsigned chain_cache_next;
+
+static void chain_cache_drop(uint32_t start) {
+    for (int i = 0; i < CHAIN_CACHE_SLOTS; i++) {
+        if (chain_cache[i].map && chain_cache[i].start == start) {
+            kfree(chain_cache[i].map);
+            chain_cache[i].map = NULL;
+        }
+    }
+}
+
+// Clusters of the chain starting at `start`, or NULL (caller walks the FAT)
+static const uint32_t *chain_map(uint32_t start, uint32_t *len) {
+    for (int i = 0; i < CHAIN_CACHE_SLOTS; i++) {
+        if (chain_cache[i].map && chain_cache[i].start == start) {
+            *len = chain_cache[i].len;
+            return chain_cache[i].map;
+        }
+    }
+
+    uint32_t n = 0;
+    for (uint32_t c = start; c >= 2 && c < FAT32_EOC_MARKER && n < CHAIN_MAX_LEN; c = get_next_cluster(c))
+        n++;
+    if (n == 0) return NULL;
+
+    uint32_t *map = (uint32_t *)kmalloc(n * sizeof(uint32_t));
+    if (!map) return NULL;
+    uint32_t c = start;
+    for (uint32_t i = 0; i < n; i++) {
+        map[i] = c;
+        c = get_next_cluster(c);
+    }
+
+    unsigned slot = chain_cache_next++ % CHAIN_CACHE_SLOTS;
+    if (chain_cache[slot].map) kfree(chain_cache[slot].map);
+    chain_cache[slot].start = start;
+    chain_cache[slot].len = n;
+    chain_cache[slot].map = map;
+    *len = n;
+    return map;
+}
+
 long fat32_vfs_read(file_t *file, void *buf, size_t len, uint64_t offset) {
     if (!file || !file->inode || !buf) return -1;
 
@@ -436,12 +492,19 @@ long fat32_vfs_read(file_t *file, void *buf, size_t len, uint64_t offset) {
     if (offset + len > file_size) len = file_size - offset;
 
     uint32_t cluster_size = sectors_per_cluster * 512;
-    uint32_t clusters_to_skip = offset / cluster_size;
+    uint32_t index = offset / cluster_size;
     uint32_t offset_in_cluster = offset % cluster_size;
 
-    for (uint32_t i = 0; i < clusters_to_skip; i++) {
-        current_cluster = get_next_cluster(current_cluster);
-        if (current_cluster >= FAT32_EOC_MARKER) return 0;
+    uint32_t map_len = 0;
+    const uint32_t *map = chain_map(current_cluster, &map_len);
+    if (map) {
+        if (index >= map_len) return 0;
+        current_cluster = map[index];
+    } else {
+        for (uint32_t i = 0; i < index; i++) {
+            current_cluster = get_next_cluster(current_cluster);
+            if (current_cluster >= FAT32_EOC_MARKER) return 0;
+        }
     }
 
     uint8_t *dest = (uint8_t *)buf;
@@ -461,7 +524,11 @@ long fat32_vfs_read(file_t *file, void *buf, size_t len, uint64_t offset) {
             memcpy(dest + bytes_read, sector_buf + start_byte, bytes_to_copy);
             bytes_read += bytes_to_copy;
         }
-        current_cluster = get_next_cluster(current_cluster);
+        index++;
+        if (map)
+            current_cluster = (index < map_len) ? map[index] : FAT32_EOC_MARKER;
+        else
+            current_cluster = get_next_cluster(current_cluster);
     }
     return bytes_read;
 }
@@ -495,6 +562,7 @@ inode_t *fat32_vfs_lookup(inode_t *parent, const char *name) {
 
                 bool has_long = lfn_feed_entry(&acc, &entries[e], cluster_lba + i, (uint8_t)e, long_name);
                 if (entries[e].attributes == FAT_ATTR_LFN) continue;
+                if (entries[e].attributes & FAT_ATTR_VOLUME_ID) { lfn_accum_reset(&acc); continue; }
 
                 bool matched = compare_name_83(entries[e].name, target_83) ||
                                (has_long && strcmp(long_name, name) == 0);
@@ -607,6 +675,11 @@ long fat32_dir_getdents(inode_t *inode, uint64_t *offset, void *buf_ptr, uint32_
                 bool has_long = lfn_feed_entry(&acc, &entries[e], cluster_lba + i, (uint8_t)e, long_name);
 
                 if (entries[e].attributes == FAT_ATTR_LFN) {
+                    (*offset)++;
+                    continue;
+                }
+                if (entries[e].attributes & FAT_ATTR_VOLUME_ID) {
+                    lfn_accum_reset(&acc);
                     (*offset)++;
                     continue;
                 }
@@ -831,6 +904,20 @@ static bool fat32_find_contiguous_free_slots(uint32_t dir_cluster, int needed,
     set_next_cluster(last_cluster, new_cluster);
     fat32_fat_sync();
 
+    // The free slots left at the end of the old chain may include the 0x00
+    // end-of-directory marker, which would stop every reader before the new
+    // cluster. Mark them deleted (0xE5) so scans continue into it.
+    for (int i = 0; i < run_len; i++) {
+        if (i > 0 && run_lba[i] == run_lba[i - 1]) continue;
+        ata_read_sector(run_lba[i], sector_buf);
+        fat32_dir_t *entries = (fat32_dir_t *)sector_buf;
+        for (int j = i; j < run_len && run_lba[j] == run_lba[i]; j++) {
+            if (entries[run_idx[j]].name[0] == 0x00)
+                entries[run_idx[j]].name[0] = (char)0xE5;
+        }
+        ata_write_sector(run_lba[i], sector_buf);
+    }
+
     uint32_t new_lba = cluster_to_lba(new_cluster);
     for (int i = 0; i < needed; i++) {
         out_lba[i] = new_lba + (uint32_t)(i / 16);
@@ -1020,6 +1107,7 @@ long fat32_vfs_write(file_t *file, const void *buf, size_t len, uint64_t offset)
     uint32_t needed_clusters = (required_size + cluster_size - 1) / cluster_size;
 
     if (needed_clusters > current_clusters_owned) {
+        chain_cache_drop(current_cluster);
         uint32_t tail = current_cluster;
         while (get_next_cluster(tail) < FAT32_EOC_MARKER && get_next_cluster(tail) != 0) {
             tail = get_next_cluster(tail);
@@ -1117,6 +1205,7 @@ int fat32_vfs_truncate(inode_t *inode, uint64_t length) {
 
     uint32_t rest = get_next_cluster(last);
     if (rest >= 2 && rest < FAT32_EOC_MARKER) {
+        chain_cache_drop(inode->ino);
         set_next_cluster(last, FAT32_EOC_MARKER);
         fat32_free_chain(rest);
     }
@@ -1173,6 +1262,7 @@ int fat32_vfs_unlink(inode_t *parent, const char *name) {
                         }
                     }
 
+                    chain_cache_drop(target_start_cluster);
                     fat32_free_chain(target_start_cluster);
                     fat32_fat_sync();
 

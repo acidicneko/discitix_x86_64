@@ -25,7 +25,7 @@ uint32_t y_cursor;
 bool tty_initialized;
 
 fb_info_t *current_fb;
-tty_t ttys[4];
+tty_t ttys[4]; // max 4 TTYs present
 
 static file_operations_t tty_file_ops = {
   .read = tty_read,
@@ -36,6 +36,10 @@ static file_operations_t tty_file_ops = {
 };
 
 static bool cursor_visible = true;
+
+// Set while a program owns the screen (/dev/fb0 is open): TTYs keep their
+// buffers up to date but don't paint.
+bool tty_graphics_mode = false;
 
 void init_tty() {
   init_framebuffer();
@@ -121,6 +125,7 @@ static void paint_bitmap_cell(terminal_cell_t cell, uint32_t x, uint32_t y) {
 }
 
 static void paint_cell(terminal_cell_t cell, uint32_t x, uint32_t y) {
+  if (tty_graphics_mode) return;
   if (!g_font.header || !g_font.glyphBuffer) {
     paint_bitmap_cell(cell, x, y);
     return;
@@ -173,7 +178,7 @@ static void scroll(tty_t *tty) {
   for (size_t col = 0; col < row; ++col)
     tty->buffer[(tty->height - 1) * row + col] = blank;
 
-  if (tty == current_tty)
+  if (tty == current_tty && !tty_graphics_mode)
     scroll_framebuffer(tty->bg, g_font.header ? g_font.header->height : GLYPH_HEIGHT);
 }
 
@@ -243,7 +248,7 @@ void tty_write_chars(tty_t *tty, const char *s, size_t len) {
 }
 
 void tty_repaint(tty_t *tty) {
-  if (tty != current_tty) return;
+  if (tty != current_tty || tty_graphics_mode) return;
   framebuffer_clear(tty->colors[0]);
   for (uint16_t y = 0; y < tty->height; y++)
     for (uint16_t x = 0; x < tty->width; x++)
@@ -273,7 +278,12 @@ void tty_clear() {
     tty->y_cursor = 0;
     memset(tty->buffer, 0, sizeof(terminal_cell_t) * tty->width * tty->height);
   }
-  framebuffer_clear(tty ? tty->bg : currentBg);
+  if (!tty_graphics_mode) framebuffer_clear(tty ? tty->bg : currentBg);
+}
+
+void tty_set_graphics_mode(bool on) {
+  tty_graphics_mode = on;
+  if (!on) tty_repaint(current_tty);
 }
 
 tty_t* get_current_tty(){

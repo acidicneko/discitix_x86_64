@@ -168,6 +168,22 @@ static void setup_task_stdio(task_t *t) {
         }
     }
 }
+// Maps USER_STACK_PAGES contiguous pages at kaddr below USER_STACK_TOP_VADDR.
+// On failure nothing stays mapped, so the caller can free kaddr.
+int map_user_stack(uint64_t cr3, void *kaddr) {
+    uint64_t flags = PTE_PRESENT | PTE_RW | PTE_USER;
+    for (uint64_t i = 0; i < USER_STACK_PAGES; i++) {
+        void *virt = (void *)(USER_STACK_VADDR + i * 4096);
+        void *phys = phys_from_virt((void *)((uint64_t)kaddr + i * 4096));
+        if (vmm_map_page_in(cr3, virt, phys, flags) != 0) {
+            for (uint64_t j = 0; j <= i; j++)
+                vmm_unmap_page_in(cr3, (void *)(USER_STACK_VADDR + j * 4096));
+            return -1;
+        }
+    }
+    return 0;
+}
+
 task_t *create_elf_task_args(const void *elf_data, size_t elf_size, size_t stack_pages,
                               int argc, char *argv[], int envc, char *envp[]) {
     uint64_t task_cr3 = vmm_create_user_page_table();
@@ -181,12 +197,12 @@ task_t *create_elf_task_args(const void *elf_data, size_t elf_size, size_t stack
     
     task_t *t = (task_t *)kmalloc(sizeof(task_t));
     void *kernel_stack = pmalloc(stack_pages);
-    void *ustack = pmalloc(2); 
+    void *ustack = pmalloc(USER_STACK_PAGES);
     
     if (!t || !kernel_stack || !ustack) {
         if (t) kfree(t);
         if (kernel_stack) pmm_free_pages(kernel_stack, stack_pages);
-        if (ustack) pmm_free_pages(ustack, 2);
+        if (ustack) pmm_free_pages(ustack, USER_STACK_PAGES);
         elf_free(&elf_info);
         vmm_free_user_page_table(task_cr3);
         return NULL;
@@ -198,29 +214,20 @@ task_t *create_elf_task_args(const void *elf_data, size_t elf_size, size_t stack
     // Build the stack contents before mapping, so a failure here only has to
     // free the unmapped pages.
     user_stack_result_t stack_res;
-    if (build_user_stack((uint8_t*)ustack, USER_STACK_TOP_VADDR - USER_STACK_VADDR,
+    if (build_user_stack((uint8_t*)ustack, USER_STACK_SIZE,
                           USER_STACK_VADDR, argc, argv, envc, envp, &stack_res) != 0) {
         kfree(t);
         pmm_free_pages(kernel_stack, stack_pages);
-        pmm_free_pages(ustack, 2);
+        pmm_free_pages(ustack, USER_STACK_PAGES);
         elf_free(&elf_info);
         vmm_free_user_page_table(task_cr3);
         return NULL;
     }
 
-    // Stack occupies [USER_STACK_VADDR, USER_STACK_TOP_VADDR), same as sys_exec.
-    uint64_t user_flags = PTE_PRESENT | PTE_RW | PTE_USER;
-    void *ustack_phys1 = phys_from_virt(ustack);
-    void *ustack_phys2 = phys_from_virt((void*)((uint64_t)ustack + 4096));
-    
-    if (vmm_map_page_in(task_cr3, (void*)USER_STACK_VADDR, ustack_phys1, user_flags) != 0 ||
-        vmm_map_page_in(task_cr3, (void*)(USER_STACK_VADDR + 4096), ustack_phys2, user_flags) != 0) {
-        // Unmap whatever got mapped so the page table free doesn't free it too.
-        vmm_unmap_page_in(task_cr3, (void*)USER_STACK_VADDR);
-        vmm_unmap_page_in(task_cr3, (void*)(USER_STACK_VADDR + 4096));
+    if (map_user_stack(task_cr3, ustack) != 0) {
         kfree(t);
         pmm_free_pages(kernel_stack, stack_pages);
-        pmm_free_pages(ustack, 2);
+        pmm_free_pages(ustack, USER_STACK_PAGES);
         elf_free(&elf_info);
         vmm_free_user_page_table(task_cr3);
         return NULL;

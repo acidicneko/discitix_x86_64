@@ -50,25 +50,24 @@ $(INITRD): $(STRIPCTL)
 	@echo "[STRIPCTL]"
 	@./misc/initrd/build.sh
 
+# The FAT32 partition starts 1 MiB into the image; mtools addresses it as
+# image@@offset, so no loop device, mount or root is needed.
+PART = $(IMAGE)@@1M
+
 $(IMAGE): $(TARGET) userland $(LIMINE) $(INITRD)
 	@echo [CREATE IMAGE]
-	@dd if=/dev/zero of=$(IMAGE) bs=1M count=64
-	@parted -s $(IMAGE) mklabel msdos
-	@parted -s $(IMAGE) mkpart primary fat32 1MiB 100%
-	@LOOPDEV=$$(sudo losetup --find --show --partscan $(IMAGE)) && \
-	sudo mkfs.fat -F32 $${LOOPDEV}p1 && \
-	mkdir -p build/mnt && \
-	sudo mount $${LOOPDEV}p1 build/mnt && \
-	sudo mkdir build/mnt/boot && \
-	sudo cp $(TARGET) build/mnt/boot/kernel.elf && \
-	sudo cp misc/initrd/initrd.img build/mnt/boot/initrd.img && \
-	sudo cp misc/limine.conf build/mnt/boot/limine.conf && \
-	sudo cp limine/limine*.sys build/mnt/boot/ && \
-	sudo cp misc/default.psf build/mnt/font.psf && \
-	sudo ./limine/limine bios-install $(IMAGE) && \
-	sudo cp -r userland/sysroot/. build/mnt && \
-	sudo umount build/mnt && \
-	sudo losetup -d $${LOOPDEV}
+	@command -v mformat >/dev/null || { echo "error: mtools not found (install the mtools package)" >&2; exit 1; }
+	@rm -f $(IMAGE)
+	@dd if=/dev/zero of=$(IMAGE) bs=1M count=64 status=none
+	@parted -s $(IMAGE) mklabel msdos mkpart primary fat32 1MiB 100%
+	@mformat -i $(PART) -F -v DISCITIX ::
+	@find userland/sysroot -mindepth 1 -maxdepth 1 -exec mcopy -Q -s -m -i $(PART) {} ::/ \;
+	@mdir -b -i $(PART) ::/boot >/dev/null 2>&1 || mmd -i $(PART) ::/boot
+	@mcopy -Q -o -i $(PART) $(TARGET) ::/boot/kernel.elf
+	@mcopy -Q -o -i $(PART) $(INITRD) ::/boot/initrd.img
+	@mcopy -Q -o -i $(PART) misc/limine.conf $(wildcard limine/limine*.sys) ::/boot/
+	@mcopy -Q -o -i $(PART) misc/default.psf ::/font.psf
+	@./limine/limine bios-install $(IMAGE) >/dev/null
 	@echo "[DONE]"
 
 $(TARGET): $(OFILES)

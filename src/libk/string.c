@@ -67,9 +67,10 @@ uint16_t *memsetw(uint16_t *dest, uint16_t val, size_t count) {
 }
 
 void *memcpy(void *dest, const void *src, size_t n) {
-    uint8_t *d = (uint8_t*)dest;
-    const uint8_t *s = (const uint8_t*)src;
-    for (size_t i = 0; i < n; i++) d[i] = s[i];
+    void *d = dest;
+    size_t words = n / 8, bytes = n % 8;
+    asm volatile("cld; rep movsq" : "+D"(d), "+S"(src), "+c"(words) :: "memory");
+    asm volatile("rep movsb" : "+D"(d), "+S"(src), "+c"(bytes) :: "memory");
     return dest;
 }
 

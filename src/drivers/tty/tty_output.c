@@ -17,7 +17,7 @@ long tty_write(file_t* file, const void* data, size_t len, uint64_t off){
 void tty_switch(int id){
   if (id < 0 || id >= TTY_NUM) return;
   tty_t *tty = &ttys[id];
-  if (tty == current_tty) return;
+  if (tty == current_tty || tty_graphics_mode) return;
 
   uint64_t flags;
   asm volatile("pushfq; pop %0; cli" : "=r"(flags) :: "memory");

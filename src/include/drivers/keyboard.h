@@ -39,6 +39,7 @@
 #include <stdint.h>
 
 void keyboard_install(void);
+void init_kbd_device(void);
 void keyboard_handler(register_t* regs);
 void handleKey_normal(uint8_t scancode);
 char keyboard_read();

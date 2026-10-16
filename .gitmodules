@@ -17,3 +17,6 @@
 [submodule "ports/suckless_utils/src"]
 	path = ports/suckless_utils/src
 	url = git://git.suckless.org/sbase
+[submodule "ports/doom/src"]
+	path = ports/doom/src
+	url = https://github.com/ozkl/doomgeneric.git

@@ -4,6 +4,8 @@
 #include <drivers/tty/tty.h>
 #include <libk/stdio.h>
 #include <libk/utils.h>
+#include <libk/errno.h>
+#include <fs/devfs.h>
 
 // keyboard buffer handling
 char buf_char;
@@ -35,12 +37,77 @@ const char keyMap_shift[58] = {
   'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', 0, '*', 0, ' ',                                                                                                      
 };
 
-/*keyboard IRQ handler*/                                                                                                                                                 
+// /dev/kbd: raw scancodes (with 0xE0 prefixes and releases) while it's open
+#define KBD_BUF_SIZE 256
+static uint8_t kbd_buf[KBD_BUF_SIZE];
+static volatile uint32_t kbd_head, kbd_tail;
+static int kbd_users;
+
+static void kbd_push(uint8_t scancode) {
+  uint32_t next = (kbd_head + 1) % KBD_BUF_SIZE;
+  if (next == kbd_tail) return;   // full: drop
+  kbd_buf[kbd_head] = scancode;
+  kbd_head = next;
+}
+
+// Keep modifier state right while keys bypass the TTY
+static void track_modifiers(uint8_t scancode) {
+  switch (scancode) {
+    case LEFT_SHIFT_PRESSED:  case RIGHT_SHIFT_PRESSED:  isShift = 1; break;
+    case LEFT_SHIFT_RELEASED: case RIGHT_SHIFT_RELEASED: isShift = 0; break;
+    case LEFT_CTRL_PRESSED:  isCtrl = 1; break;
+    case LEFT_CTRL_RELEASED: isCtrl = 0; break;
+    case LEFT_ALT_PRESSED:   isAlt = 1; break;
+    case LEFT_ALT_RELEASED:  isAlt = 0; break;
+  }
+  isExtended = 0;
+}
+
+/*keyboard IRQ handler*/
 void keyboard_handler(register_t* regs){
-  (void)regs;                                                                                                                                                         
-  uint8_t scancode;                                                                                                                                                      
-  scancode = inb(0x60); /*read from keyboard data port*/
+  (void)regs;
+  uint8_t scancode = inb(0x60); /*read from keyboard data port*/
+  if (kbd_users) kbd_push(scancode);
+  if (tty_graphics_mode) {
+    track_modifiers(scancode);
+    return;
+  }
   handleKey_normal(scancode);
+}
+
+static int kbd_open(inode_t *inode, uint32_t flags) {
+  (void)inode; (void)flags;
+  if (kbd_users++ == 0) kbd_tail = kbd_head;
+  return 0;
+}
+
+static int kbd_close(inode_t *inode) {
+  (void)inode;
+  if (kbd_users > 0) kbd_users--;
+  return 0;
+}
+
+// Never blocks: returns 0 when no scancodes are waiting
+static long kbd_read(file_t *file, void *buf, size_t len, uint64_t off) {
+  (void)file; (void)off;
+  uint8_t *dest = (uint8_t *)buf;
+  size_t n = 0;
+  while (n < len && kbd_tail != kbd_head) {
+    dest[n++] = kbd_buf[kbd_tail];
+    kbd_tail = (kbd_tail + 1) % KBD_BUF_SIZE;
+  }
+  return (long)n;
+}
+
+static file_operations_t kbd_ops = {
+  .open = kbd_open,
+  .close = kbd_close,
+  .read = kbd_read,
+};
+
+void init_kbd_device(void) {
+  if (devfs_register_device("kbd", &kbd_ops, FT_CHR, NULL) == 0)
+    log("KBD", INFO, "Registered /dev/kbd\n\r");
 }
 
 /*translate a scancode to an ascii character*/

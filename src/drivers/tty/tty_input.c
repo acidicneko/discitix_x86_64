@@ -1,37 +1,39 @@
-#include <drivers/tty/tty.h>
-#include <drivers/tty/psf2.h>
 #include <drivers/framebuffer.h>
+#include <drivers/tty/psf2.h>
+#include <drivers/tty/tty.h>
 #include <libk/errno.h>
 #include <stddef.h>
 #include <stdint.h>
 
-#define TCGETS      0x5401
-#define TCSETS      0x5402
-#define TIOCGWINSZ  0x5413
-#define LFLAG_ICANON 0000002   // same bits as userland's <termios.h>
-#define LFLAG_ECHO   0000010
+#define TCGETS 0x5401
+#define TCSETS 0x5402
+#define TIOCGWINSZ 0x5413
+#define TCSETTHM 0x5696
+#define LFLAG_ICANON 0000002 // same bits as userland's <termios.h>
+#define LFLAG_ECHO 0000010
 
 struct winsize {
   uint16_t ws_row, ws_col, ws_xpixel, ws_ypixel;
 };
 
-void tty_set_ldisc(tty_t* tty, int mode) {
-  tty->ldisc_mode = mode;
-}
+void tty_set_ldisc(tty_t *tty, int mode) { tty->ldisc_mode = mode; }
 
 static void echo(tty_t *tty, char c) {
-  if (tty->echo) tty_write_chars(tty, &c, 1);
+  if (tty->echo)
+    tty_write_chars(tty, &c, 1);
 }
 
 static void echo_seq(tty_t *tty, const char *s) {
-  while (*s) echo(tty, *s++);
+  while (*s)
+    echo(tty, *s++);
 }
 
 // Hand the edited line to readers (Enter, or Ctrl-D on a non-empty line)
 static void flush_line(tty_t *tty) {
   for (size_t i = 0; i < tty->line_length; i++) {
     size_t next_head = (tty->input_head + 1) % TTY_MAX_BUF;
-    if (next_head == tty->input_tail) break;
+    if (next_head == tty->input_tail)
+      break;
     tty->input_buf[tty->input_head] = tty->line_buffer[i];
     tty->input_head = next_head;
   }
@@ -41,7 +43,7 @@ static void flush_line(tty_t *tty) {
 }
 
 // Handle a character input from keyboard to a specific TTY
-void tty_input_char(tty_t* tty, char c) {
+void tty_input_char(tty_t *tty, char c) {
   if (tty->ldisc_mode == TTY_RAW) {
     // Raw mode: just put char directly into input buffer
     size_t next_head = (tty->input_head + 1) % TTY_MAX_BUF;
@@ -49,10 +51,11 @@ void tty_input_char(tty_t* tty, char c) {
       tty->input_buf[tty->input_head] = c;
       tty->input_head = next_head;
     }
-    if (c >= 32 && c < 127) echo(tty, c);
+    if (c >= 32 && c < 127)
+      echo(tty, c);
   } else {
     // Canonical mode: line editing with escape sequence handling
-    
+
     // Handle escape sequence parsing
     if (tty->input_esc_state == INPUT_STATE_ESC) {
       if (c == '[') {
@@ -64,52 +67,52 @@ void tty_input_char(tty_t* tty, char c) {
         return;
       }
     }
-    
+
     if (tty->input_esc_state == INPUT_STATE_CSI) {
       tty->input_esc_state = INPUT_STATE_NORMAL;
       switch (c) {
-        case 'A': // Up arrow - TODO: could implement history later
-          return;
-        case 'B': // Down arrow - TODO: could implement history later
-          return;
-        case 'C': // Right arrow - move cursor right
-          if (tty->line_cursor < tty->line_length) {
-            tty->line_cursor++;
-            echo_seq(tty, "\033[C");
-          }
-          return;
-        case 'D': // Left arrow - move cursor left
-          if (tty->line_cursor > 0) {
-            tty->line_cursor--;
-            echo_seq(tty, "\033[D");
-          }
-          return;
-        case 'H': // Home - move to beginning
-          while (tty->line_cursor > 0) {
-            tty->line_cursor--;
-            echo_seq(tty, "\033[D");
-          }
-          return;
-        case 'F': // End - move to end
-          while (tty->line_cursor < tty->line_length) {
-            tty->line_cursor++;
-            echo_seq(tty, "\033[C");
-          }
-          return;
-        case '3': // Could be Delete (ESC[3~)
-          // For simplicity, just reset state - delete needs ~ after
-          return;
-        default:
-          return;
+      case 'A': // Up arrow - TODO: could implement history later
+        return;
+      case 'B': // Down arrow - TODO: could implement history later
+        return;
+      case 'C': // Right arrow - move cursor right
+        if (tty->line_cursor < tty->line_length) {
+          tty->line_cursor++;
+          echo_seq(tty, "\033[C");
+        }
+        return;
+      case 'D': // Left arrow - move cursor left
+        if (tty->line_cursor > 0) {
+          tty->line_cursor--;
+          echo_seq(tty, "\033[D");
+        }
+        return;
+      case 'H': // Home - move to beginning
+        while (tty->line_cursor > 0) {
+          tty->line_cursor--;
+          echo_seq(tty, "\033[D");
+        }
+        return;
+      case 'F': // End - move to end
+        while (tty->line_cursor < tty->line_length) {
+          tty->line_cursor++;
+          echo_seq(tty, "\033[C");
+        }
+        return;
+      case '3': // Could be Delete (ESC[3~)
+        // For simplicity, just reset state - delete needs ~ after
+        return;
+      default:
+        return;
       }
     }
-    
+
     // Check for escape character
     if (c == '\033') {
       tty->input_esc_state = INPUT_STATE_ESC;
       return;
     }
-    
+
     if (c == '\n' || c == '\r') {
       tty->line_buffer[tty->line_length++] = '\n';
       flush_line(tty);
@@ -174,14 +177,17 @@ void tty_input_char(tty_t* tty, char c) {
 }
 
 // Read from TTY - implements line discipline
-long tty_read(file_t* file, void* buf, size_t len, uint64_t off) {
+long tty_read(file_t *file, void *buf, size_t len, uint64_t off) {
   (void)off;
-  if (!buf) return -EFAULT;
-  if (len == 0) return 0;
+  if (!buf)
+    return -EFAULT;
+  if (len == 0)
+    return 0;
 
-  tty_t* tty = (tty_t *)file->inode->private;
-  if (!tty) return -ENXIO;
-  char* dest = (char*)buf;
+  tty_t *tty = (tty_t *)file->inode->private;
+  if (!tty)
+    return -ENXIO;
+  char *dest = (char *)buf;
   size_t bytes_read = 0;
 
   if (tty->ldisc_mode == TTY_CANONICAL) {
@@ -199,7 +205,8 @@ long tty_read(file_t* file, void* buf, size_t len, uint64_t off) {
       char c = tty->input_buf[tty->input_tail];
       tty->input_tail = (tty->input_tail + 1) % TTY_MAX_BUF;
       dest[bytes_read++] = c;
-      if (c == '\n') break;
+      if (c == '\n')
+        break;
     }
 
     if (tty->input_tail == tty->input_head && !tty->eof_pending) {
@@ -219,10 +226,12 @@ long tty_read(file_t* file, void* buf, size_t len, uint64_t off) {
   return (long)bytes_read;
 }
 
-int tty_ioctl(file_t* file, uint64_t request, void* arg) {
+int tty_ioctl(file_t *file, uint64_t request, void *arg) {
   tty_t *tty = (tty_t *)file->inode->private;
-  if (!tty) return -ENOTTY;
-  if (!arg) return -EFAULT;
+  if (!tty)
+    return -ENOTTY;
+  if (!arg)
+    return -EFAULT;
 
   switch (request) {
   case TIOCGWINSZ: {
@@ -244,6 +253,18 @@ int tty_ioctl(file_t* file, uint64_t request, void* arg) {
       flush_line(tty);
     tty_set_ldisc(tty, mode);
     tty->echo = (lflag & LFLAG_ECHO) != 0;
+    return 0;
+  }
+  case TCSETTHM: {
+    uint32_t *colors = (uint32_t *)arg;
+    init_colors(colors[0], colors[1], colors[2], colors[3], colors[4],
+                colors[5], colors[6], colors[7], colors[8], colors[9],
+                colors[10], colors[11], colors[12], colors[13], colors[14],
+                colors[15]);
+    // change colors for all TTYs
+    for (int i = 0; i < TTY_NUM; i++) {
+      tty_repaint(&tty[i]);
+    }
     return 0;
   }
   default:

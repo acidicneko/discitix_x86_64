@@ -7,7 +7,7 @@
 #   make install-lua      install one
 #   make clean            remove all port build directories
 
-PORTS := dash lua tcc suckless_utils
+PORTS := dash lua tcc suckless_utils doom
 
 all: $(PORTS)
 
